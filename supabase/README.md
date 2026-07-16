@@ -12,18 +12,25 @@ from **Project Settings → API** into `.env.local`:
 NEXT_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...     # "anon public" key
 SUPABASE_SERVICE_ROLE_KEY=...          # "service_role" key (server-only, keep secret)
+AUTH_SECRET=...                        # openssl rand -hex 32 (signs the PIN session cookie)
 ```
 
-## 2. Run the migration
+## 2. Run the migrations
 
-The migration creates all tables, indexes, the seeded default user, **and** the
-private `statements` Storage bucket.
+Run both migration files, **in order**:
+
+1. `migrations/0001_init.sql` — all tables, indexes, the seeded default user,
+   **and** the private `statements` Storage bucket.
+2. `migrations/0002_auth.sql` — the `app_auth` table that holds the 4-digit PIN
+   (default `1234`, RLS-locked so it's not exposed via the public API).
 
 ### Option A — SQL editor (fastest)
 
 1. Open your project → **SQL Editor** → **New query**.
-2. Paste the contents of [`migrations/0001_init.sql`](./migrations/0001_init.sql).
-3. Click **Run**.
+2. Paste the contents of [`migrations/0001_init.sql`](./migrations/0001_init.sql),
+   click **Run**.
+3. New query again, paste [`migrations/0002_auth.sql`](./migrations/0002_auth.sql),
+   click **Run**.
 
 ### Option B — Supabase CLI
 
@@ -49,3 +56,7 @@ Uploaded files are stored under `statements/{bookId}/{bankAccountId}/{filename}`
   the MVP. **TODO:** encrypt before any real launch.
 - The service-role key bypasses Row Level Security. It is only used from server
   code (`lib/supabase-server.ts`) and never shipped to the browser.
+- The `app_auth.pin` is stored in plain text so it can be changed directly in
+  the database, but RLS-with-no-policies keeps it off the public API and it is
+  only ever read server-side. Change it with:
+  `update app_auth set pin = '4271', updated_at = now() where id = 1;`
