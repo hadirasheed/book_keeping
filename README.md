@@ -48,6 +48,25 @@ npm run dev
 # open http://localhost:3000  (redirects to /dashboard)
 ```
 
+## Deploy to Vercel
+
+This is a standard Next.js app — Vercel auto-detects the framework, build
+command (`next build`), and output. No `vercel.json` is required.
+
+1. Push this repo to GitHub (already done for the working branch).
+2. At [vercel.com/new](https://vercel.com/new), **Import** the
+   `hadirasheed/book_keeping` repository.
+3. Under **Environment Variables**, add the three Supabase values (same as
+   `.env.local`) for the Production (and Preview) environments:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY` (server-only — do **not** prefix with `NEXT_PUBLIC_`)
+4. Click **Deploy**. Subsequent pushes to the connected branch auto-deploy.
+
+Make sure the Supabase migration (`supabase/migrations/0001_init.sql`) has been
+run against the project those keys point to, otherwise API calls return a
+"default user not found" error.
+
 ## What you can do
 
 1. **Create a Book** from the dashboard.
