@@ -11,6 +11,19 @@ export async function PATCH(
     const { id } = await params;
     const supabase = getServiceClient();
 
+    // A disabled provider can't be the active one.
+    const { data: target } = await supabase
+      .from("ai_model_configs")
+      .select("enabled")
+      .eq("id", id)
+      .single();
+    if (target && target.enabled === false) {
+      return NextResponse.json(
+        { error: "Enable this provider before setting it active." },
+        { status: 400 }
+      );
+    }
+
     // Deactivate everything, then activate the target. (Small table, so two
     // simple statements are clearer than a conditional single update.)
     const { error: deactivateError } = await supabase

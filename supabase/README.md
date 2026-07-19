@@ -23,6 +23,8 @@ Run both migration files, **in order**:
    **and** the private `statements` Storage bucket.
 2. `migrations/0002_auth.sql` — the `app_auth` table that holds the 4-digit PIN
    (default `1234`, RLS-locked so it's not exposed via the public API).
+3. `migrations/0003_model_toggle_usage.sql` — adds `enabled`, `input_tokens`,
+   `output_tokens`, and `last_tested_at` to `ai_model_configs`.
 
 ### Option A — SQL editor (fastest)
 

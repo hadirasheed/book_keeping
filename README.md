@@ -76,6 +76,8 @@ Run both files in the Supabase SQL editor (or via the CLI), in order:
    tables, indexes, seeded default user, private `statements` Storage bucket.
 2. [`supabase/migrations/0002_auth.sql`](./supabase/migrations/0002_auth.sql) —
    the `app_auth` PIN table (default PIN `1234`).
+3. [`supabase/migrations/0003_model_toggle_usage.sql`](./supabase/migrations/0003_model_toggle_usage.sql)
+   — adds `enabled` + token-usage columns to `ai_model_configs`.
 
 Full instructions: [`supabase/README.md`](./supabase/README.md).
 
@@ -118,8 +120,10 @@ run against the project those keys point to, otherwise API calls return a
    upload page, or **Run pending** to process them all). This calls the active
    provider to extract transactions into the combined transactions table and
    moves the statement `pending → processing → done`.
-5. **Settings → Models**: save API keys/model names for Claude/OpenAI/OpenRouter
-   and toggle which one is active (only one active at a time).
+5. **Settings → Models**: save API keys/model names for Claude/OpenAI/OpenRouter,
+   **enable/disable** each provider, **Test connection** (a live ping that reports
+   the reply + token usage), see **cumulative token usage**, and toggle which one
+   is **active** (only one active at a time; a disabled provider can't be active).
 
 ## AI statement processing
 

@@ -54,7 +54,8 @@ export async function POST(
     const bytes = new Uint8Array(await blob.arrayBuffer());
     const isPdf = /\.pdf$/i.test(statement.file_name);
 
-    const txns = await extractTransactions(config as AIModelConfig, {
+    const cfg = config as AIModelConfig;
+    const { transactions: txns, usage } = await extractTransactions(cfg, {
       bytes,
       fileName: statement.file_name,
       isPdf,
@@ -78,12 +79,21 @@ export async function POST(
       if (insErr) throw insErr;
     }
 
+    // Accumulate token usage on the provider config.
+    await supabase
+      .from("ai_model_configs")
+      .update({
+        input_tokens: cfg.input_tokens + usage.input_tokens,
+        output_tokens: cfg.output_tokens + usage.output_tokens,
+      })
+      .eq("id", cfg.id);
+
     await supabase
       .from("statements")
       .update({ status: "done", processed_at: new Date().toISOString() })
       .eq("id", id);
 
-    return NextResponse.json({ status: "done", inserted: txns.length });
+    return NextResponse.json({ status: "done", inserted: txns.length, usage });
   } catch (err) {
     await supabase.from("statements").update({ status: "failed" }).eq("id", id);
     return NextResponse.json(

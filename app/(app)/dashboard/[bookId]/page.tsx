@@ -7,7 +7,7 @@ import { Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ProcessButton } from "@/components/ProcessButton";
+import { ProcessButton, type ActionMessage } from "@/components/ProcessButton";
 import { initials, formatSigned } from "@/lib/utils";
 import type {
   BankAccount,
@@ -49,6 +49,7 @@ export default function BookOverviewPage({
   const [search, setSearch] = useState("");
 
   const [bulkRunning, setBulkRunning] = useState(false);
+  const [banner, setBanner] = useState<ActionMessage | null>(null);
 
   // Process every pending/failed statement in sequence with the active model.
   async function runPending() {
@@ -57,11 +58,34 @@ export default function BookOverviewPage({
     );
     if (targets.length === 0) return;
     setBulkRunning(true);
+    setBanner(null);
+    let done = 0;
+    const failures: string[] = [];
     try {
       for (const s of targets) {
-        await fetch(`/api/statements/${s.id}/process`, { method: "POST" });
+        try {
+          const res = await fetch(`/api/statements/${s.id}/process`, {
+            method: "POST",
+          });
+          const json = await res.json();
+          if (!res.ok || json.status === "failed") {
+            failures.push(`• ${s.file_name}: ${json.error || "failed"}`);
+          } else {
+            done += 1;
+          }
+        } catch (err) {
+          failures.push(`• ${s.file_name}: ${(err as Error).message}`);
+        }
         await refresh();
       }
+      setBanner(
+        failures.length
+          ? {
+              ok: false,
+              text: `Processed ${done} of ${targets.length}. ${failures.length} failed:\n${failures.join("\n")}`,
+            }
+          : { ok: true, text: `Processed ${done} statement${done === 1 ? "" : "s"}.` }
+      );
     } finally {
       setBulkRunning(false);
     }
@@ -218,6 +242,27 @@ export default function BookOverviewPage({
           ))}
         </div>
 
+        {/* AI run result / error banner (full text) */}
+        {banner && (
+          <div
+            className="mb-4 flex items-start justify-between gap-4 rounded-[12px] px-4 py-3 text-[13px]"
+            style={
+              banner.ok
+                ? { background: "#e7f4ec", color: "#1a7f4b" }
+                : { background: "#fbeae8", color: "#c0392b" }
+            }
+          >
+            <p className="whitespace-pre-wrap break-words">{banner.text}</p>
+            <button
+              onClick={() => setBanner(null)}
+              className="shrink-0 text-[16px] leading-none opacity-70 hover:opacity-100"
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         {/* Uploaded statements */}
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-[17px] font-bold text-[#001c64]">
@@ -295,8 +340,10 @@ export default function BookOverviewPage({
                   <div>
                     <ProcessButton
                       statementId={s.id}
+                      fileName={s.file_name}
                       status={s.status}
                       onDone={refresh}
+                      onMessage={setBanner}
                     />
                   </div>
                 </div>

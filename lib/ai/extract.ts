@@ -10,6 +10,16 @@ export interface ExtractedTxn {
   category: string | null;
 }
 
+export interface TokenUsage {
+  input_tokens: number;
+  output_tokens: number;
+}
+
+export interface ExtractResult {
+  transactions: ExtractedTxn[];
+  usage: TokenUsage;
+}
+
 interface FileInput {
   bytes: Uint8Array;
   fileName: string;
@@ -95,11 +105,16 @@ function toBase64(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("base64");
 }
 
+const OPENAI_COMPAT_ENDPOINT: Record<string, string> = {
+  openrouter: "https://openrouter.ai/api/v1/chat/completions",
+  openai: "https://api.openai.com/v1/chat/completions",
+};
+
 // --- Claude (official Anthropic SDK): native PDF + CSV -------------------
 async function extractWithClaude(
   config: AIModelConfig,
   file: FileInput
-): Promise<ExtractedTxn[]> {
+): Promise<ExtractResult> {
   const client = new Anthropic({ apiKey: config.api_key });
 
   const content: Anthropic.ContentBlockParam[] = [];
@@ -129,26 +144,27 @@ async function extractWithClaude(
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
     .map((b) => b.text)
     .join("");
-  return parseTransactions(text);
+  return {
+    transactions: parseTransactions(text),
+    usage: {
+      input_tokens: message.usage.input_tokens ?? 0,
+      output_tokens: message.usage.output_tokens ?? 0,
+    },
+  };
 }
 
 // --- OpenAI / OpenRouter (OpenAI-compatible chat): CSV text only ---------
 async function extractWithOpenAICompatible(
   config: AIModelConfig,
   file: FileInput
-): Promise<ExtractedTxn[]> {
+): Promise<ExtractResult> {
   if (file.isPdf) {
     throw new Error(
       "PDF parsing is currently supported only with the Claude provider. Upload a CSV, or set Claude active in Settings → Models."
     );
   }
   const csv = Buffer.from(file.bytes).toString("utf-8");
-  const endpoint =
-    config.provider === "openrouter"
-      ? "https://openrouter.ai/api/v1/chat/completions"
-      : "https://api.openai.com/v1/chat/completions";
-
-  const res = await fetch(endpoint, {
+  const res = await fetch(OPENAI_COMPAT_ENDPOINT[config.provider], {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -168,19 +184,85 @@ async function extractWithOpenAICompatible(
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
     throw new Error(
-      `${config.provider} request failed (${res.status}): ${detail.slice(0, 300)}`
+      `${config.provider} request failed (${res.status}): ${detail.slice(0, 500)}`
     );
   }
   const json = await res.json();
   const text: string = json?.choices?.[0]?.message?.content ?? "";
-  return parseTransactions(text);
+  return {
+    transactions: parseTransactions(text),
+    usage: {
+      input_tokens: json?.usage?.prompt_tokens ?? 0,
+      output_tokens: json?.usage?.completion_tokens ?? 0,
+    },
+  };
 }
 
 /** Run the configured provider to extract transactions from a statement file. */
 export async function extractTransactions(
   config: AIModelConfig,
   file: FileInput
-): Promise<ExtractedTxn[]> {
+): Promise<ExtractResult> {
   if (config.provider === "claude") return extractWithClaude(config, file);
   return extractWithOpenAICompatible(config, file);
+}
+
+/**
+ * Minimal round-trip to verify a provider's key + model actually work.
+ * Returns the model's reply text and the token usage of the ping.
+ */
+export async function pingProvider(
+  config: AIModelConfig
+): Promise<{ reply: string; usage: TokenUsage }> {
+  if (!config.api_key) throw new Error("No API key saved for this provider.");
+
+  if (config.provider === "claude") {
+    const client = new Anthropic({ apiKey: config.api_key });
+    const message = await client.messages.create({
+      model: config.model_name,
+      max_tokens: 16,
+      messages: [
+        { role: "user", content: "Reply with exactly: OK" },
+      ],
+    });
+    const reply = message.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("")
+      .trim();
+    return {
+      reply: reply || "(empty reply)",
+      usage: {
+        input_tokens: message.usage.input_tokens ?? 0,
+        output_tokens: message.usage.output_tokens ?? 0,
+      },
+    };
+  }
+
+  const res = await fetch(OPENAI_COMPAT_ENDPOINT[config.provider], {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.api_key}`,
+    },
+    body: JSON.stringify({
+      model: config.model_name,
+      max_tokens: 16,
+      messages: [{ role: "user", content: "Reply with exactly: OK" }],
+    }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(
+      `${config.provider} request failed (${res.status}): ${detail.slice(0, 500)}`
+    );
+  }
+  const json = await res.json();
+  return {
+    reply: (json?.choices?.[0]?.message?.content ?? "(empty reply)").trim(),
+    usage: {
+      input_tokens: json?.usage?.prompt_tokens ?? 0,
+      output_tokens: json?.usage?.completion_tokens ?? 0,
+    },
+  };
 }

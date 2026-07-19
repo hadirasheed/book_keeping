@@ -87,8 +87,7 @@ export default function ModelsSettingsPage() {
               key={meta.provider}
               meta={meta}
               config={byProvider(meta.provider)}
-              onSaved={load}
-              onActivated={load}
+              reload={load}
             />
           ))}
         </div>

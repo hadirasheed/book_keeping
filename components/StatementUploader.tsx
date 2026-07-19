@@ -125,7 +125,11 @@ export function StatementUploader({ bookId, accounts, onUploaded }: Props) {
         />
       </div>
 
-      {error && <p className="mt-3 text-sm text-[#c0392b]">{error}</p>}
+      {error && (
+        <p className="mt-3 whitespace-pre-wrap break-words rounded-[10px] bg-[#fbeae8] px-4 py-2.5 text-[13px] text-[#c0392b]">
+          Upload failed: {error}
+        </p>
+      )}
 
       <Button
         onClick={upload}

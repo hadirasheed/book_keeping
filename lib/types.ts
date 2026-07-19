@@ -86,6 +86,10 @@ export interface AIModelConfig {
   model_name: string;
   api_key: string; // plain for MVP; encrypt before real launch
   is_active: boolean;
+  enabled: boolean;
+  input_tokens: number;
+  output_tokens: number;
+  last_tested_at: string | null;
   created_at: string;
 }
 

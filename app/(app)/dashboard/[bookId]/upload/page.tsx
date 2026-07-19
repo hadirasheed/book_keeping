@@ -6,7 +6,7 @@ import { Loader2 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { StatementUploader } from "@/components/StatementUploader";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ProcessButton } from "@/components/ProcessButton";
+import { ProcessButton, type ActionMessage } from "@/components/ProcessButton";
 import type { BankAccount, StatementWithAccount } from "@/lib/types";
 
 function fileExt(name: string) {
@@ -23,6 +23,7 @@ export default function UploadPage({
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [statements, setStatements] = useState<StatementWithAccount[]>([]);
   const [loading, setLoading] = useState(true);
+  const [banner, setBanner] = useState<ActionMessage | null>(null);
 
   async function loadStatements() {
     const res = await fetch(`/api/statements?bookId=${bookId}`);
@@ -60,8 +61,29 @@ export default function UploadPage({
       <h2 className="text-[19px] font-bold text-[#001c64]">Upload a statement</h2>
       <div className="mb-[22px] mt-0.5 text-[13.5px] text-[#6c7378]">
         Select the account this statement belongs to, then add a PDF or CSV.
-        Mizan AI will extract and categorize the transactions.
+        Mizan AI will extract and categorize the transactions when you press
+        Run AI.
       </div>
+
+      {banner && (
+        <div
+          className="mb-5 flex items-start justify-between gap-4 rounded-[12px] px-4 py-3 text-[13px]"
+          style={
+            banner.ok
+              ? { background: "#e7f4ec", color: "#1a7f4b" }
+              : { background: "#fbeae8", color: "#c0392b" }
+          }
+        >
+          <p className="whitespace-pre-wrap break-words">{banner.text}</p>
+          <button
+            onClick={() => setBanner(null)}
+            className="shrink-0 text-[16px] leading-none opacity-70 hover:opacity-100"
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center gap-2 text-[#6c7378]">
@@ -119,8 +141,10 @@ export default function UploadPage({
                 <StatusBadge status={s.status} />
                 <ProcessButton
                   statementId={s.id}
+                  fileName={s.file_name}
                   status={s.status}
                   onDone={loadStatements}
+                  onMessage={setBanner}
                 />
               </div>
             </div>
