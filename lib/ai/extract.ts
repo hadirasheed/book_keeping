@@ -153,6 +153,64 @@ async function extractWithClaude(
   };
 }
 
+interface ChatMessage {
+  role: "system" | "user";
+  content: string;
+}
+
+/**
+ * Call an OpenAI-compatible chat endpoint. If the provider rejects the request
+ * with a 402 "can only afford N" (common on free OpenRouter accounts), retry
+ * once with the affordable token budget instead of failing outright.
+ */
+async function openAICompatChat(
+  config: AIModelConfig,
+  messages: ChatMessage[],
+  maxTokens: number
+): Promise<{ text: string; usage: TokenUsage }> {
+  const endpoint = OPENAI_COMPAT_ENDPOINT[config.provider];
+
+  async function call(mt: number) {
+    return fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.api_key}`,
+      },
+      body: JSON.stringify({ model: config.model_name, max_tokens: mt, messages }),
+    });
+  }
+
+  let res = await call(maxTokens);
+  if (res.status === 402) {
+    const detail = await res.text().catch(() => "");
+    const affordable = Number(detail.match(/can only afford (\d+)/i)?.[1]);
+    if (Number.isFinite(affordable) && affordable >= 256) {
+      // Leave a little headroom below the stated ceiling.
+      res = await call(Math.max(256, affordable - 64));
+    } else {
+      throw new Error(
+        `${config.provider} request failed (402): ${detail.slice(0, 500)}`
+      );
+    }
+  }
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(
+      `${config.provider} request failed (${res.status}): ${detail.slice(0, 500)}`
+    );
+  }
+  const json = await res.json();
+  return {
+    text: json?.choices?.[0]?.message?.content ?? "",
+    usage: {
+      input_tokens: json?.usage?.prompt_tokens ?? 0,
+      output_tokens: json?.usage?.completion_tokens ?? 0,
+    },
+  };
+}
+
 // --- OpenAI / OpenRouter (OpenAI-compatible chat): CSV text only ---------
 async function extractWithOpenAICompatible(
   config: AIModelConfig,
@@ -164,38 +222,15 @@ async function extractWithOpenAICompatible(
     );
   }
   const csv = Buffer.from(file.bytes).toString("utf-8");
-  const res = await fetch(OPENAI_COMPAT_ENDPOINT[config.provider], {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.api_key}`,
-    },
-    body: JSON.stringify({
-      model: config.model_name,
-      max_tokens: 16000,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: `${INSTRUCTION}\n\nCSV contents:\n${csv}` },
-      ],
-    }),
-  });
-
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(
-      `${config.provider} request failed (${res.status}): ${detail.slice(0, 500)}`
-    );
-  }
-  const json = await res.json();
-  const text: string = json?.choices?.[0]?.message?.content ?? "";
-  return {
-    transactions: parseTransactions(text),
-    usage: {
-      input_tokens: json?.usage?.prompt_tokens ?? 0,
-      output_tokens: json?.usage?.completion_tokens ?? 0,
-    },
-  };
+  const { text, usage } = await openAICompatChat(
+    config,
+    [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: `${INSTRUCTION}\n\nCSV contents:\n${csv}` },
+    ],
+    16000
+  );
+  return { transactions: parseTransactions(text), usage };
 }
 
 /** Run the configured provider to extract transactions from a statement file. */
@@ -239,30 +274,10 @@ export async function pingProvider(
     };
   }
 
-  const res = await fetch(OPENAI_COMPAT_ENDPOINT[config.provider], {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.api_key}`,
-    },
-    body: JSON.stringify({
-      model: config.model_name,
-      max_tokens: 16,
-      messages: [{ role: "user", content: "Reply with exactly: OK" }],
-    }),
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(
-      `${config.provider} request failed (${res.status}): ${detail.slice(0, 500)}`
-    );
-  }
-  const json = await res.json();
-  return {
-    reply: (json?.choices?.[0]?.message?.content ?? "(empty reply)").trim(),
-    usage: {
-      input_tokens: json?.usage?.prompt_tokens ?? 0,
-      output_tokens: json?.usage?.completion_tokens ?? 0,
-    },
-  };
+  const { text, usage } = await openAICompatChat(
+    config,
+    [{ role: "user", content: "Reply with exactly: OK" }],
+    16
+  );
+  return { reply: text.trim() || "(empty reply)", usage };
 }
