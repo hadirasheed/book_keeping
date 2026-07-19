@@ -58,7 +58,7 @@ export default function ModelsSettingsPage() {
   const byProvider = (p: AIProvider) => configs.find((c) => c.provider === p);
 
   return (
-    <div className="mz-fade max-w-[820px] px-10 pb-10 pt-8">
+    <div className="mz-fade max-w-[820px] px-10 pb-10 pt-8 max-[820px]:px-4">
       <div className="mb-1.5 text-[13px] font-semibold text-[#6c7378]">
         Settings
       </div>

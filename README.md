@@ -7,7 +7,10 @@ OpenRouter) used later for statement parsing.
 
 The UI follows the **Mizan** design handoff — a navy + bright-blue fintech shell
 with a fixed left sidebar (see `Mizan.dc.html` reference). Components are
-recreated with the codebase's own Tailwind primitives.
+recreated with the codebase's own Tailwind primitives. It is responsive at a
+single **820px** breakpoint: below it the sidebar becomes an off-canvas drawer
+(hamburger top bar + scrim), grids collapse to one column, tables scroll
+horizontally, and header rows wrap.
 
 Access is gated by a simple **4-digit PIN** (see "PIN login" below). Beyond the
 gate there are no per-user accounts yet — all data is attributed to a single

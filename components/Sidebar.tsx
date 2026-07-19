@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { LogOut, Menu } from "lucide-react";
 import { MizanLogo } from "@/components/MizanLogo";
 import type { Book } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -44,6 +44,8 @@ export function Sidebar() {
   const router = useRouter();
   const [books, setBooks] = useState<Book[]>([]);
   const [loggingOut, setLoggingOut] = useState(false);
+  // Off-canvas drawer state (only relevant below the 820px breakpoint).
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Detect the current book from the URL (/dashboard/{id}[/...]).
   const bookMatch = pathname.match(/^\/dashboard\/([^/]+)(\/(accounts|upload))?/);
@@ -57,6 +59,11 @@ export function Sidebar() {
       .then((j) => setBooks(j.books ?? []))
       .catch(() => {});
   }, [bookId]);
+
+  // Auto-close the drawer on any navigation.
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [pathname]);
 
   const currentBook = books.find((b) => b.id === bookId);
 
@@ -78,7 +85,33 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex w-[250px] flex-none flex-col bg-[#001c64] px-[18px] py-[26px] text-white">
+    <>
+      {/* Mobile top bar (below 820px): hamburger + wordmark opens the drawer. */}
+      <div
+        onClick={() => setDrawerOpen(true)}
+        className="fixed inset-x-0 top-0 z-[55] hidden h-[52px] cursor-pointer items-center gap-3 bg-[#001c64] px-4 text-white max-[820px]:flex"
+      >
+        <Menu className="size-[22px]" />
+        <span className="text-[17px] font-bold tracking-[-.3px]">Mizan</span>
+      </div>
+
+      {/* Scrim behind the open drawer. */}
+      <div
+        data-open={drawerOpen}
+        onClick={() => setDrawerOpen(false)}
+        className="fixed inset-0 z-[58] hidden bg-[rgba(0,28,100,.4)] max-[820px]:data-[open=true]:block"
+      />
+
+      <aside
+        data-open={drawerOpen}
+        className={cn(
+          "flex w-[250px] flex-none flex-col bg-[#001c64] px-[18px] py-[26px] text-white",
+          // Off-canvas drawer below 820px.
+          "max-[820px]:fixed max-[820px]:inset-y-0 max-[820px]:left-0 max-[820px]:z-[60] max-[820px]:w-[260px]",
+          "max-[820px]:-translate-x-full max-[820px]:transition-transform max-[820px]:duration-[260ms] max-[820px]:ease-out",
+          "max-[820px]:data-[open=true]:translate-x-0 max-[820px]:data-[open=true]:shadow-[0_0_60px_rgba(0,0,0,.4)]"
+        )}
+      >
       {/* Brand */}
       <div className="flex items-center gap-[11px] px-2 pb-1">
         <MizanLogo />
@@ -164,6 +197,7 @@ export function Sidebar() {
           Log out
         </button>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

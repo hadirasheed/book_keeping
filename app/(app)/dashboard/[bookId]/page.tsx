@@ -120,7 +120,7 @@ export default function BookOverviewPage({
   return (
     <div className="mz-fade">
       {/* Book header */}
-      <div className="px-10 pt-7">
+      <div className="px-10 pt-7 max-[820px]:px-4">
         <div className="mb-3 flex items-center gap-2 text-[13px] text-[#6c7378]">
           <Link href="/dashboard" className="font-semibold hover:text-[#0070e0]">
             Dashboard
@@ -128,7 +128,7 @@ export default function BookOverviewPage({
           <span>›</span>
           <span className="font-semibold text-[#2c2e2f]">{book?.name}</span>
         </div>
-        <div className="flex items-center justify-between gap-5">
+        <div className="flex flex-wrap items-center justify-between gap-5">
           <div className="flex items-center gap-3.5">
             <div className="flex size-[52px] items-center justify-center rounded-[13px] bg-[#e6f0fc] text-[21px] font-bold text-[#0070e0]">
               {initials(book?.name ?? "")}
@@ -151,9 +151,9 @@ export default function BookOverviewPage({
         </div>
       </div>
 
-      <div className="px-10 pb-10 pt-[26px]">
+      <div className="px-10 pb-10 pt-[26px] max-[820px]:px-4">
         {/* Stat row */}
-        <div className="mb-[26px] grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="mb-[26px] grid grid-cols-2 gap-4 min-[821px]:grid-cols-4">
           <div className="rounded-[14px] bg-[#001c64] px-5 py-[18px] text-white">
             <div className="text-[12.5px] font-semibold text-[#9fbdea]">
               Combined balance
@@ -198,8 +198,8 @@ export default function BookOverviewPage({
             Upload new →
           </Link>
         </div>
-        <div className="mb-[30px] overflow-hidden rounded-[14px] border border-[#e6e9ec] bg-white">
-          <div className="grid grid-cols-[2.4fr_1.6fr_1.4fr_1fr_1fr] border-b border-[#eef1f4] bg-[#f7f9fb] px-5 py-3 text-[11.5px] font-bold uppercase tracking-[.5px] text-[#8b9198]">
+        <div className="mb-[30px] overflow-hidden rounded-[14px] border border-[#e6e9ec] bg-white max-[820px]:overflow-x-auto">
+          <div className="grid grid-cols-[2.4fr_1.6fr_1.4fr_1fr_1fr] border-b border-[#eef1f4] bg-[#f7f9fb] px-5 py-3 text-[11.5px] font-bold uppercase tracking-[.5px] text-[#8b9198] max-[820px]:min-w-[640px]">
             <div>File</div>
             <div>Account</div>
             <div>Period</div>
@@ -214,7 +214,7 @@ export default function BookOverviewPage({
             statements.map((s) => (
               <div
                 key={s.id}
-                className="grid grid-cols-[2.4fr_1.6fr_1.4fr_1fr_1fr] items-center border-b border-[#f2f4f7] px-5 py-3.5 text-[13.5px] last:border-0"
+                className="grid grid-cols-[2.4fr_1.6fr_1.4fr_1fr_1fr] items-center border-b border-[#f2f4f7] px-5 py-3.5 text-[13.5px] last:border-0 max-[820px]:min-w-[640px]"
               >
                 <div className="flex min-w-0 items-center gap-2.5">
                   <div className="flex size-[30px] flex-none items-center justify-center rounded-[7px] bg-[#fbeae8] text-[10px] font-bold text-[#c0392b]">
@@ -238,7 +238,7 @@ export default function BookOverviewPage({
         </div>
 
         {/* Combined transactions */}
-        <div className="mb-3 flex items-center justify-between gap-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-[17px] font-bold text-[#001c64]">
             Combined transactions
           </h2>
@@ -246,11 +246,11 @@ export default function BookOverviewPage({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search transactions…"
-            className="h-10 w-[260px] rounded-full"
+            className="h-10 w-[260px] rounded-full max-[820px]:w-full"
           />
         </div>
-        <div className="overflow-hidden rounded-[14px] border border-[#e6e9ec] bg-white">
-          <div className="grid grid-cols-[1fr_3fr_1.6fr_1.4fr_1.3fr] border-b border-[#eef1f4] bg-[#f7f9fb] px-5 py-3 text-[11.5px] font-bold uppercase tracking-[.5px] text-[#8b9198]">
+        <div className="overflow-hidden rounded-[14px] border border-[#e6e9ec] bg-white max-[820px]:overflow-x-auto">
+          <div className="grid grid-cols-[1fr_3fr_1.6fr_1.4fr_1.3fr] border-b border-[#eef1f4] bg-[#f7f9fb] px-5 py-3 text-[11.5px] font-bold uppercase tracking-[.5px] text-[#8b9198] max-[820px]:min-w-[640px]">
             <div>Date</div>
             <div>Description</div>
             <div>Account</div>
@@ -273,7 +273,7 @@ export default function BookOverviewPage({
               return (
                 <div
                   key={t.id}
-                  className="grid grid-cols-[1fr_3fr_1.6fr_1.4fr_1.3fr] items-center border-b border-[#f2f4f7] px-5 py-3 text-[13.5px] last:border-0"
+                  className="grid grid-cols-[1fr_3fr_1.6fr_1.4fr_1.3fr] items-center border-b border-[#f2f4f7] px-5 py-3 text-[13.5px] last:border-0 max-[820px]:min-w-[640px]"
                 >
                   <div className="text-[#6c7378]">
                     {new Date(t.txn_date).toLocaleDateString("en-US", {

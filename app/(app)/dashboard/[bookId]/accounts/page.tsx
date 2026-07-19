@@ -115,7 +115,7 @@ export default function AccountsPage({
   }
 
   return (
-    <div className="mz-fade px-10 pb-10 pt-[26px]">
+    <div className="mz-fade px-10 pb-10 pt-[26px] max-[820px]:px-4">
       <div className="mb-3">
         <Link
           href={`/dashboard/${bookId}`}
@@ -124,7 +124,7 @@ export default function AccountsPage({
           ← Back to book
         </Link>
       </div>
-      <div className="mb-[18px] flex items-center justify-between gap-4">
+      <div className="mb-[18px] flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-[19px] font-bold text-[#001c64]">Bank accounts</h2>
           <div className="mt-0.5 text-[13.5px] text-[#6c7378]">
@@ -151,7 +151,7 @@ export default function AccountsPage({
           No accounts yet. Add your first one to start uploading statements.
         </div>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4 max-[820px]:grid-cols-1">
           {accounts.map((a, i) => {
             const t = TINTS[i % TINTS.length];
             return (
@@ -215,8 +215,8 @@ export default function AccountsPage({
             Details help match uploaded statements to the right account.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid grid-cols-2 gap-3.5">
-          <div className="col-span-2 space-y-2">
+        <div className="grid grid-cols-2 gap-3.5 max-[820px]:grid-cols-1">
+          <div className="col-span-2 space-y-2 max-[820px]:col-span-1">
             <Label htmlFor="bank_name">Bank name</Label>
             <Input
               id="bank_name"
@@ -226,7 +226,7 @@ export default function AccountsPage({
               autoFocus
             />
           </div>
-          <div className="col-span-2 space-y-2">
+          <div className="col-span-2 space-y-2 max-[820px]:col-span-1">
             <Label htmlFor="account_name">Nickname</Label>
             <Input
               id="account_name"

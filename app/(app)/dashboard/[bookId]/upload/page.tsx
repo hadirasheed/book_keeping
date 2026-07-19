@@ -47,7 +47,7 @@ export default function UploadPage({
   }
 
   return (
-    <div className="mz-fade max-w-[760px] px-10 pb-10 pt-[26px]">
+    <div className="mz-fade max-w-[760px] px-10 pb-10 pt-[26px] max-[820px]:px-4">
       <div className="mb-3">
         <Link
           href={`/dashboard/${bookId}`}

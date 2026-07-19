@@ -83,9 +83,9 @@ export default function DashboardPage() {
   );
 
   return (
-    <div className="mz-fade px-10 py-8">
+    <div className="mz-fade px-10 py-8 max-[820px]:px-4">
       {/* Header */}
-      <div className="mb-7 flex items-end justify-between gap-5">
+      <div className="mb-7 flex flex-wrap items-end justify-between gap-5">
         <div>
           <div className="mb-1.5 text-[13px] font-semibold text-[#6c7378]">
             Welcome back
@@ -104,7 +104,7 @@ export default function DashboardPage() {
       )}
 
       {/* Stats */}
-      <div className="mb-[30px] grid grid-cols-1 gap-[18px] sm:grid-cols-3">
+      <div className="mb-[30px] grid grid-cols-1 gap-[18px] min-[821px]:grid-cols-3">
         <StatCard label="Active books" value={books.length} />
         <StatCard
           label="Statements processed"
@@ -122,7 +122,7 @@ export default function DashboardPage() {
           <Loader2 className="size-4 animate-spin" /> Loading books…
         </div>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-[18px]">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-[18px] max-[820px]:grid-cols-1">
           {books.map((book) => (
             <button
               key={book.id}
