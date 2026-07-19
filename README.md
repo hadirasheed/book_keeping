@@ -1,9 +1,13 @@
-# AI Bookkeeping Dashboard (MVP)
+# Mizan — AI Bookkeeping Dashboard (MVP)
 
 Upload bank statements organized under **Books** (ledgers/projects), each holding
 one or more **Bank Accounts**. Statements are uploaded against a specific bank
 account. A **Settings → Models** page manages AI providers (Claude, OpenAI,
 OpenRouter) used later for statement parsing.
+
+The UI follows the **Mizan** design handoff — a navy + bright-blue fintech shell
+with a fixed left sidebar (see `Mizan.dc.html` reference). Components are
+recreated with the codebase's own Tailwind primitives.
 
 Access is gated by a simple **4-digit PIN** (see "PIN login" below). Beyond the
 gate there are no per-user accounts yet — all data is attributed to a single

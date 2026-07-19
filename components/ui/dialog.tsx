@@ -1,17 +1,17 @@
 "use client";
 
 import * as React from "react";
-import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Minimal controlled dialog (modal). No external dependency.
+// Minimal controlled modal matching the Mizan design (navy overlay, mzpop).
 interface DialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   children: React.ReactNode;
+  className?: string;
 }
 
-function Dialog({ open, onOpenChange, children }: DialogProps) {
+function Dialog({ open, onOpenChange, children, className }: DialogProps) {
   React.useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -24,25 +24,20 @@ function Dialog({ open, onOpenChange, children }: DialogProps) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/50"
-        onClick={() => onOpenChange(false)}
-        aria-hidden
-      />
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,28,100,.42)" }}
+      onClick={() => onOpenChange(false)}
+    >
       <div
         role="dialog"
         aria-modal="true"
-        className="relative z-10 w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+        className={cn(
+          "mz-pop w-full max-w-md rounded-2xl bg-white p-7 shadow-[0_24px_60px_rgba(0,28,100,.3)]",
+          className
+        )}
       >
-        <button
-          type="button"
-          onClick={() => onOpenChange(false)}
-          className="absolute right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100"
-          aria-label="Close"
-        >
-          <X className="size-4" />
-        </button>
         {children}
       </div>
     </div>
@@ -53,12 +48,7 @@ function DialogHeader({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div
-      className={cn("mb-4 flex flex-col space-y-1.5", className)}
-      {...props}
-    />
-  );
+  return <div className={cn("mb-5 flex flex-col gap-1", className)} {...props} />;
 }
 
 function DialogTitle({
@@ -67,7 +57,7 @@ function DialogTitle({
 }: React.HTMLAttributes<HTMLHeadingElement>) {
   return (
     <h2
-      className={cn("text-lg font-semibold leading-none tracking-tight", className)}
+      className={cn("text-xl font-bold text-[#001c64]", className)}
       {...props}
     />
   );
@@ -78,7 +68,7 @@ function DialogDescription({
   ...props
 }: React.HTMLAttributes<HTMLParagraphElement>) {
   return (
-    <p className={cn("text-sm text-muted-foreground", className)} {...props} />
+    <p className={cn("text-[13.5px] text-[#6c7378]", className)} {...props} />
   );
 }
 
@@ -88,19 +78,10 @@ function DialogFooter({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn(
-        "mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
-        className
-      )}
+      className={cn("mt-6 flex justify-end gap-3", className)}
       {...props}
     />
   );
 }
 
-export {
-  Dialog,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-};
+export { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter };

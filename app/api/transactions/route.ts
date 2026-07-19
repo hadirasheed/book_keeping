@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     let query = supabase
       .from("transactions")
       .select(
-        "*, bank_account:bank_accounts!inner(id, bank_name, account_name, book_id)"
+        "*, bank_account:bank_accounts!inner(id, bank_name, account_name, currency, book_id)"
       )
       .eq("bank_account.book_id", bookId)
       .order("txn_date", { ascending: false });

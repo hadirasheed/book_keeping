@@ -2,25 +2,17 @@
 
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
 import type { AIModelConfigMasked, AIProvider } from "@/lib/types";
 
 interface ProviderMeta {
   provider: AIProvider;
-  label: string;
+  name: string;
+  mark: string;
+  tintBg: string;
+  tintColor: string;
   placeholderModel: string;
-  keyHint: string;
 }
 
 interface Props {
@@ -30,14 +22,22 @@ interface Props {
   onActivated: () => void;
 }
 
-// One provider card: model name, API key (masked once stored), active toggle.
 export function ModelConfigCard({ meta, config, onSaved, onActivated }: Props) {
-  const [modelName, setModelName] = useState(config?.model_name ?? "");
+  const [model, setModel] = useState(config?.model_name ?? "");
   const [apiKey, setApiKey] = useState("");
   const [editingKey, setEditingKey] = useState(!config?.has_key);
   const [saving, setSaving] = useState(false);
   const [activating, setActivating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const active = Boolean(config?.is_active);
+
+  const stateLabel = active
+    ? "Active — processing statements"
+    : config?.has_key
+      ? "Connected"
+      : "Not connected";
+  const stateColor = active ? "#0070e0" : config?.has_key ? "#1a7f4b" : "#8b9198";
 
   async function save() {
     setSaving(true);
@@ -48,9 +48,8 @@ export function ModelConfigCard({ meta, config, onSaved, onActivated }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           provider: meta.provider,
-          model_name: modelName,
-          // Empty api_key on an existing provider keeps the stored key.
-          api_key: apiKey,
+          model_name: model,
+          api_key: apiKey, // empty keeps stored key
         }),
       });
       const json = await res.json();
@@ -65,8 +64,8 @@ export function ModelConfigCard({ meta, config, onSaved, onActivated }: Props) {
     }
   }
 
-  async function activate(next: boolean) {
-    if (!config || !next) return; // only "activate" is meaningful (one active at a time)
+  async function activate() {
+    if (!config || active) return;
     setActivating(true);
     setError(null);
     try {
@@ -84,84 +83,97 @@ export function ModelConfigCard({ meta, config, onSaved, onActivated }: Props) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between gap-2">
-          <span>{meta.label}</span>
-          {config?.is_active && <Badge variant="done">Active</Badge>}
-        </CardTitle>
-        <CardDescription>{meta.keyHint}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-1.5">
-          <Label htmlFor={`${meta.provider}-model`}>Model name</Label>
-          <Input
-            id={`${meta.provider}-model`}
-            value={modelName}
-            onChange={(e) => setModelName(e.target.value)}
-            placeholder={meta.placeholderModel}
-          />
+    <div
+      className="rounded-[14px] border-[1.5px] bg-white p-6"
+      style={{ borderColor: active ? "#0070e0" : "#e6e9ec" }}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div
+            className="flex size-[42px] items-center justify-center rounded-[10px] text-[16px] font-bold"
+            style={{ background: meta.tintBg, color: meta.tintColor }}
+          >
+            {meta.mark}
+          </div>
+          <div>
+            <div className="text-[16px] font-bold text-[#001c64]">
+              {meta.name}
+            </div>
+            <div
+              className="mt-0.5 text-[12.5px] font-semibold"
+              style={{ color: stateColor }}
+            >
+              {stateLabel}
+            </div>
+          </div>
         </div>
+        <button
+          onClick={activate}
+          disabled={!config || active || activating}
+          className="rounded-full border-[1.5px] px-[18px] py-2 text-[13.5px] font-bold transition-colors disabled:cursor-default"
+          style={
+            active
+              ? { background: "#0070e0", color: "#fff", borderColor: "#0070e0" }
+              : { background: "#fff", color: "#001c64", borderColor: "#c3cbd3" }
+          }
+        >
+          {activating ? "…" : active ? "Active" : "Set active"}
+        </button>
+      </div>
 
+      <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor={`${meta.provider}-key`}>API key</Label>
+          <Label className="text-[12px] text-[#6c7378]">API key</Label>
           {config?.has_key && !editingKey ? (
-            <div className="flex items-center justify-between gap-2 rounded-md border border-input bg-muted/40 px-3 py-2">
-              <code className="text-sm">{config.api_key_masked}</code>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
+            <div className="flex h-11 items-center justify-between rounded-[9px] border border-[#d7dde3] bg-[#f7f9fb] px-3.5">
+              <code className="text-[13px] text-[#2c2e2f]">
+                {config.api_key_masked}
+              </code>
+              <button
                 onClick={() => setEditingKey(true)}
+                className="text-[12px] font-semibold text-[#0070e0] hover:underline"
               >
-                Update key
-              </Button>
+                Update
+              </button>
             </div>
           ) : (
             <Input
-              id={`${meta.provider}-key`}
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="Paste API key"
+              placeholder="sk-…"
               autoComplete="off"
+              className="h-11 rounded-[9px]"
             />
           )}
         </div>
-
-        {error && <p className="text-sm text-destructive">{error}</p>}
-
-        <div className="flex items-center justify-between pt-1">
-          <div className="flex items-center gap-2">
-            <Switch
-              id={`${meta.provider}-active`}
-              checked={Boolean(config?.is_active)}
-              disabled={!config || activating}
-              onCheckedChange={activate}
-            />
-            <Label
-              htmlFor={`${meta.provider}-active`}
-              className="text-muted-foreground"
-            >
-              {config
-                ? config.is_active
-                  ? "Active"
-                  : "Set active"
-                : "Save to enable"}
-            </Label>
-          </div>
-          <Button onClick={save} disabled={saving || !modelName.trim()} size="sm">
-            {saving ? (
-              <>
-                <Loader2 className="size-4 animate-spin" /> Saving…
-              </>
-            ) : (
-              "Save"
-            )}
-          </Button>
+        <div className="space-y-1.5">
+          <Label className="text-[12px] text-[#6c7378]">Model name</Label>
+          <Input
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            placeholder={meta.placeholderModel}
+            className="h-11 rounded-[9px]"
+          />
         </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between">
+        {error ? (
+          <p className="text-[12.5px] text-[#c0392b]">{error}</p>
+        ) : (
+          <span />
+        )}
+        <button
+          onClick={save}
+          disabled={saving || !model.trim()}
+          className="inline-flex items-center gap-2 rounded-full border-[1.5px] border-[#c3cbd3] bg-white px-4 py-2 text-[13px] font-bold text-[#001c64] transition-colors hover:border-[#0070e0] disabled:opacity-50"
+        >
+          {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+          Save
+        </button>
+      </div>
+    </div>
   );
 }
 

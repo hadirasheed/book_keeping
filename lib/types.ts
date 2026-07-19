@@ -20,6 +20,13 @@ export interface Book {
   created_at: string;
 }
 
+// Book plus derived counts used by the dashboard cards.
+export interface BookWithStats extends Book {
+  account_count: number;
+  statement_count: number;
+  transaction_count: number;
+}
+
 export interface BankAccount {
   id: string;
   book_id: string;
@@ -44,7 +51,10 @@ export interface Statement {
 
 // Statement joined with its bank account (used by the statements list API).
 export interface StatementWithAccount extends Statement {
-  bank_account: Pick<BankAccount, "id" | "bank_name" | "account_name"> | null;
+  bank_account: Pick<
+    BankAccount,
+    "id" | "bank_name" | "account_name" | "currency"
+  > | null;
 }
 
 export interface Transaction {
@@ -64,7 +74,10 @@ export interface Transaction {
 
 // Transaction joined with its bank account (used by the transactions list API).
 export interface TransactionWithAccount extends Transaction {
-  bank_account: Pick<BankAccount, "id" | "bank_name" | "account_name"> | null;
+  bank_account: Pick<
+    BankAccount,
+    "id" | "bank_name" | "account_name" | "currency"
+  > | null;
 }
 
 export interface AIModelConfig {

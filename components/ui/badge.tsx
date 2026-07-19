@@ -2,21 +2,19 @@ import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
+// Status pills use the Mizan status palette.
 const badgeVariants = cva(
-  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors",
+  "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold",
   {
     variants: {
       variant: {
-        default: "border-transparent bg-primary text-primary-foreground",
-        secondary: "border-transparent bg-secondary text-secondary-foreground",
-        outline: "text-foreground",
-        pending:
-          "border-transparent bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-        processing:
-          "border-transparent bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
-        done: "border-transparent bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
-        failed:
-          "border-transparent bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+        default: "bg-[#e6f0fc] text-[#0070e0]",
+        secondary: "bg-[#eef1f4] text-[#4a5056]",
+        outline: "border border-[#e6e9ec] text-[#2c2e2f]",
+        pending: "bg-[#fdf3dc] text-[#9a6a00]",
+        processing: "bg-[#e6f0fc] text-[#0070e0]",
+        done: "bg-[#e7f4ec] text-[#1a7f4b]",
+        failed: "bg-[#fbeae8] text-[#c0392b]",
       },
     },
     defaultVariants: {

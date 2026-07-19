@@ -8,21 +8,27 @@ import type { AIModelConfigMasked, AIProvider } from "@/lib/types";
 const PROVIDERS: ProviderMeta[] = [
   {
     provider: "claude",
-    label: "Claude (Anthropic)",
+    name: "Anthropic Claude",
+    mark: "C",
+    tintBg: "#f2ede4",
+    tintColor: "#c96442",
     placeholderModel: "claude-sonnet-5",
-    keyHint: "Anthropic API key, e.g. sk-ant-…",
   },
   {
     provider: "openai",
-    label: "OpenAI",
-    placeholderModel: "gpt-4.1",
-    keyHint: "OpenAI API key, e.g. sk-…",
+    name: "OpenAI",
+    mark: "AI",
+    tintBg: "#e6f4ef",
+    tintColor: "#0f8a63",
+    placeholderModel: "gpt-4o",
   },
   {
     provider: "openrouter",
-    label: "OpenRouter",
-    placeholderModel: "anthropic/claude-sonnet-5",
-    keyHint: "OpenRouter key, plus any model string it supports.",
+    name: "OpenRouter",
+    mark: "OR",
+    tintBg: "#eceafc",
+    tintColor: "#5b3fd6",
+    placeholderModel: "anthropic/claude-3.5-sonnet",
   },
 ];
 
@@ -52,27 +58,30 @@ export default function ModelsSettingsPage() {
   const byProvider = (p: AIProvider) => configs.find((c) => c.provider === p);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">AI Models</h1>
-        <p className="text-sm text-muted-foreground">
-          Configure the provider used to parse statements. Only one can be active
-          at a time.
-        </p>
+    <div className="mz-fade max-w-[820px] px-10 pb-10 pt-8">
+      <div className="mb-1.5 text-[13px] font-semibold text-[#6c7378]">
+        Settings
+      </div>
+      <h1 className="text-[26px] font-bold tracking-[-.5px] text-[#001c64]">
+        AI models
+      </h1>
+      <div className="mb-[26px] mt-1.5 text-[14px] text-[#6c7378]">
+        Connect an AI provider and choose which model reads your statements. The
+        active provider is used to extract and categorize every new upload.
       </div>
 
       {error && (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+        <p className="mb-4 rounded-[10px] border border-[#c0392b]/30 bg-[#fbeae8] p-3 text-sm text-[#c0392b]">
           {error}
         </p>
       )}
 
       {loading ? (
-        <div className="flex items-center gap-2 text-muted-foreground">
+        <div className="flex items-center gap-2 text-[#6c7378]">
           <Loader2 className="size-4 animate-spin" /> Loading providers…
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="flex flex-col gap-4">
           {PROVIDERS.map((meta) => (
             <ModelConfigCard
               key={meta.provider}

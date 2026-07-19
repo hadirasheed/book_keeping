@@ -1,24 +1,13 @@
 "use client";
 
-import { use, useCallback, useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { Landmark, Loader2, Plus, Upload } from "lucide-react";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Select } from "@/components/ui/select";
+import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { BankAccountCard } from "@/components/BankAccountCard";
 import { StatusBadge } from "@/components/StatusBadge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { formatAmount } from "@/lib/utils";
+import { initials, formatSigned } from "@/lib/utils";
 import type {
   BankAccount,
   Book,
@@ -26,12 +15,29 @@ import type {
   TransactionWithAccount,
 } from "@/lib/types";
 
-export default function BookDetailPage({
+function fileExt(name: string) {
+  const parts = name.split(".");
+  return (parts.length > 1 ? parts.pop() : "")?.toUpperCase() || "DOC";
+}
+
+function period(s: StatementWithAccount) {
+  if (s.period_start && s.period_end) {
+    const fmt = (d: string) =>
+      new Date(d).toLocaleDateString("en-US", { month: "short", year: "numeric" });
+    return fmt(s.period_start) === fmt(s.period_end)
+      ? fmt(s.period_start)
+      : `${fmt(s.period_start)} – ${fmt(s.period_end)}`;
+  }
+  return "—";
+}
+
+export default function BookOverviewPage({
   params,
 }: {
   params: Promise<{ bookId: string }>;
 }) {
   const { bookId } = use(params);
+  const router = useRouter();
 
   const [book, setBook] = useState<Book | null>(null);
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
@@ -39,44 +45,32 @@ export default function BookDetailPage({
   const [transactions, setTransactions] = useState<TransactionWithAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Transaction filters.
-  const [filterAccount, setFilterAccount] = useState("");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-
-  const loadTransactions = useCallback(async () => {
-    const qs = new URLSearchParams({ bookId });
-    if (filterAccount) qs.set("bankAccountId", filterAccount);
-    if (from) qs.set("from", from);
-    if (to) qs.set("to", to);
-    const res = await fetch(`/api/transactions?${qs.toString()}`);
-    const json = await res.json();
-    if (res.ok) setTransactions(json.transactions);
-  }, [bookId, filterAccount, from, to]);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     (async () => {
-      setLoading(true);
-      setError(null);
       try {
-        const [booksRes, accountsRes, statementsRes] = await Promise.all([
-          fetch("/api/books"),
-          fetch(`/api/bank-accounts?bookId=${bookId}`),
-          fetch(`/api/statements?bookId=${bookId}`),
-        ]);
+        const [booksRes, accountsRes, statementsRes, txnsRes] =
+          await Promise.all([
+            fetch("/api/books"),
+            fetch(`/api/bank-accounts?bookId=${bookId}`),
+            fetch(`/api/statements?bookId=${bookId}`),
+            fetch(`/api/transactions?bookId=${bookId}`),
+          ]);
         const booksJson = await booksRes.json();
         const accountsJson = await accountsRes.json();
         const statementsJson = await statementsRes.json();
+        const txnsJson = await txnsRes.json();
         if (!booksRes.ok) throw new Error(booksJson.error);
         if (!accountsRes.ok) throw new Error(accountsJson.error);
         if (!statementsRes.ok) throw new Error(statementsJson.error);
-
+        if (!txnsRes.ok) throw new Error(txnsJson.error);
         setBook(
           (booksJson.books as Book[]).find((b) => b.id === bookId) ?? null
         );
         setAccounts(accountsJson.bankAccounts);
         setStatements(statementsJson.statements);
+        setTransactions(txnsJson.transactions);
       } catch (err) {
         setError((err as Error).message);
       } finally {
@@ -85,242 +79,235 @@ export default function BookDetailPage({
     })();
   }, [bookId]);
 
-  useEffect(() => {
-    loadTransactions();
-  }, [loadTransactions]);
+  const q = search.trim().toLowerCase();
+  const filteredTxns = q
+    ? transactions.filter((t) =>
+        `${t.description ?? ""} ${t.category ?? ""} ${
+          t.bank_account?.account_name ?? ""
+        }`
+          .toLowerCase()
+          .includes(q)
+      )
+    : transactions;
+
+  // Combined balance across loaded transactions (credit +, debit -).
+  const balance = transactions.reduce(
+    (sum, t) =>
+      sum + (t.direction === "credit" ? Math.abs(t.amount) : -Math.abs(t.amount)),
+    0
+  );
+  const balCurrency = transactions[0]?.bank_account?.currency ?? "USD";
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" /> Loading…
+      <div className="px-10 py-8 text-[#6c7378]">
+        <span className="flex items-center gap-2">
+          <Loader2 className="size-4 animate-spin" /> Loading…
+        </span>
       </div>
     );
   }
-
   if (error) {
     return (
-      <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-        {error}
-      </p>
+      <div className="px-10 py-8">
+        <p className="rounded-[10px] border border-[#c0392b]/30 bg-[#fbeae8] p-3 text-sm text-[#c0392b]">
+          {error}
+        </p>
+      </div>
     );
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <Link
-            href="/dashboard"
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
-            ← Books
+    <div className="mz-fade">
+      {/* Book header */}
+      <div className="px-10 pt-7">
+        <div className="mb-3 flex items-center gap-2 text-[13px] text-[#6c7378]">
+          <Link href="/dashboard" className="font-semibold hover:text-[#0070e0]">
+            Dashboard
           </Link>
-          <h1 className="mt-1 text-2xl font-semibold">
-            {book?.name ?? "Book"}
-          </h1>
-          {book?.description && (
-            <p className="text-sm text-muted-foreground">{book.description}</p>
-          )}
+          <span>›</span>
+          <span className="font-semibold text-[#2c2e2f]">{book?.name}</span>
         </div>
-        <div className="flex gap-2">
-          <Link
-            href={`/dashboard/${bookId}/accounts`}
-            className={buttonVariants({ variant: "outline" })}
+        <div className="flex items-center justify-between gap-5">
+          <div className="flex items-center gap-3.5">
+            <div className="flex size-[52px] items-center justify-center rounded-[13px] bg-[#e6f0fc] text-[21px] font-bold text-[#0070e0]">
+              {initials(book?.name ?? "")}
+            </div>
+            <div>
+              <h1 className="text-[25px] font-bold tracking-[-.5px] text-[#001c64]">
+                {book?.name}
+              </h1>
+              <div className="mt-0.5 text-[13px] text-[#6c7378]">
+                {book?.description || "General"}
+              </div>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => router.push(`/dashboard/${bookId}/upload`)}
           >
-            <Landmark className="size-4" /> Manage accounts
-          </Link>
-          <Link
-            href={`/dashboard/${bookId}/upload`}
-            className={buttonVariants()}
-          >
-            <Upload className="size-4" /> Upload Statement
-          </Link>
+            Upload statement
+          </Button>
         </div>
       </div>
 
-      {/* Bank accounts */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-medium">Bank accounts</h2>
+      <div className="px-10 pb-10 pt-[26px]">
+        {/* Stat row */}
+        <div className="mb-[26px] grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="rounded-[14px] bg-[#001c64] px-5 py-[18px] text-white">
+            <div className="text-[12.5px] font-semibold text-[#9fbdea]">
+              Combined balance
+            </div>
+            <div className="mt-1.5 text-[24px] font-bold">
+              {transactions.length
+                ? `${balCurrency} ${balance.toLocaleString("en-US", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}`
+                : "—"}
+            </div>
+          </div>
+          {[
+            ["Bank accounts", accounts.length],
+            ["Statements", statements.length],
+            ["Transactions", transactions.length],
+          ].map(([l, v]) => (
+            <div
+              key={l}
+              className="rounded-[14px] border border-[#e6e9ec] bg-white px-5 py-[18px]"
+            >
+              <div className="text-[12.5px] font-semibold text-[#6c7378]">
+                {l}
+              </div>
+              <div className="mt-1.5 text-[24px] font-bold text-[#001c64]">
+                {v}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Uploaded statements */}
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-[17px] font-bold text-[#001c64]">
+            Uploaded statements
+          </h2>
           <Link
-            href={`/dashboard/${bookId}/accounts`}
-            className={buttonVariants({ variant: "ghost", size: "sm" })}
+            href={`/dashboard/${bookId}/upload`}
+            className="text-[13.5px] font-semibold text-[#0070e0]"
           >
-            <Plus className="size-4" /> Add
+            Upload new →
           </Link>
         </div>
-        {accounts.length === 0 ? (
-          <Card>
-            <CardContent className="p-6 text-sm text-muted-foreground">
-              No bank accounts yet.{" "}
-              <Link
-                href={`/dashboard/${bookId}/accounts`}
-                className="font-medium text-foreground underline"
-              >
-                Add one
-              </Link>{" "}
-              to start uploading statements.
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {accounts.map((a) => (
-              <BankAccountCard key={a.id} account={a} />
-            ))}
+        <div className="mb-[30px] overflow-hidden rounded-[14px] border border-[#e6e9ec] bg-white">
+          <div className="grid grid-cols-[2.4fr_1.6fr_1.4fr_1fr_1fr] border-b border-[#eef1f4] bg-[#f7f9fb] px-5 py-3 text-[11.5px] font-bold uppercase tracking-[.5px] text-[#8b9198]">
+            <div>File</div>
+            <div>Account</div>
+            <div>Period</div>
+            <div>Txns</div>
+            <div>Status</div>
           </div>
-        )}
-      </section>
-
-      {/* Recent statements */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-medium">Recent statements</h2>
-        {statements.length === 0 ? (
-          <Card>
-            <CardContent className="p-6 text-sm text-muted-foreground">
+          {statements.length === 0 ? (
+            <div className="px-5 py-8 text-center text-sm text-[#8b9198]">
               No statements uploaded yet.
-            </CardContent>
-          </Card>
-        ) : (
-          <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>File</TableHead>
-                  <TableHead>Account</TableHead>
-                  <TableHead>Uploaded</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {statements.map((s) => (
-                  <TableRow key={s.id}>
-                    <TableCell className="font-medium">{s.file_name}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {s.bank_account
-                        ? `${s.bank_account.account_name} · ${s.bank_account.bank_name}`
-                        : "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {new Date(s.uploaded_at).toLocaleString()}
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={s.status} />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
-        )}
-      </section>
-
-      {/* Transactions */}
-      <section className="space-y-3">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <h2 className="text-lg font-medium">Transactions</h2>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs">Account</Label>
-              <Select
-                value={filterAccount}
-                onChange={(e) => setFilterAccount(e.target.value)}
-                className="w-48"
+            </div>
+          ) : (
+            statements.map((s) => (
+              <div
+                key={s.id}
+                className="grid grid-cols-[2.4fr_1.6fr_1.4fr_1fr_1fr] items-center border-b border-[#f2f4f7] px-5 py-3.5 text-[13.5px] last:border-0"
               >
-                <option value="">All accounts</option>
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.account_name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">From</Label>
-              <Input
-                type="date"
-                value={from}
-                onChange={(e) => setFrom(e.target.value)}
-                className="w-40"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">To</Label>
-              <Input
-                type="date"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-                className="w-40"
-              />
-            </div>
-            {(filterAccount || from || to) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setFilterAccount("");
-                  setFrom("");
-                  setTo("");
-                }}
-              >
-                Clear
-              </Button>
-            )}
-          </div>
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <div className="flex size-[30px] flex-none items-center justify-center rounded-[7px] bg-[#fbeae8] text-[10px] font-bold text-[#c0392b]">
+                    {fileExt(s.file_name)}
+                  </div>
+                  <span className="truncate font-semibold text-[#2c2e2f]">
+                    {s.file_name}
+                  </span>
+                </div>
+                <div className="truncate text-[#6c7378]">
+                  {s.bank_account?.account_name ?? "—"}
+                </div>
+                <div className="text-[#6c7378]">{period(s)}</div>
+                <div className="font-semibold text-[#2c2e2f]">—</div>
+                <div>
+                  <StatusBadge status={s.status} />
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
-        {transactions.length === 0 ? (
-          <Card>
-            <CardContent className="p-6 text-sm text-muted-foreground">
-              No transactions yet. They will appear here once statements are
-              parsed (AI extraction is a follow-up step).
-            </CardContent>
-          </Card>
-        ) : (
-          <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Account</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {transactions.map((t) => (
-                  <TableRow key={t.id}>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {t.txn_date}
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {t.description || t.raw_description || "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {t.bank_account?.account_name ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {t.category || "—"}
-                    </TableCell>
-                    <TableCell
-                      className={`text-right tabular-nums ${
-                        t.direction === "credit"
-                          ? "text-emerald-600 dark:text-emerald-400"
-                          : ""
-                      }`}
-                    >
-                      {formatAmount(
-                        t.amount,
-                        t.bank_account ? undefined : "USD"
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
-        )}
-      </section>
+        {/* Combined transactions */}
+        <div className="mb-3 flex items-center justify-between gap-4">
+          <h2 className="text-[17px] font-bold text-[#001c64]">
+            Combined transactions
+          </h2>
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search transactions…"
+            className="h-10 w-[260px] rounded-full"
+          />
+        </div>
+        <div className="overflow-hidden rounded-[14px] border border-[#e6e9ec] bg-white">
+          <div className="grid grid-cols-[1fr_3fr_1.6fr_1.4fr_1.3fr] border-b border-[#eef1f4] bg-[#f7f9fb] px-5 py-3 text-[11.5px] font-bold uppercase tracking-[.5px] text-[#8b9198]">
+            <div>Date</div>
+            <div>Description</div>
+            <div>Account</div>
+            <div>Category</div>
+            <div className="text-right">Amount</div>
+          </div>
+          {filteredTxns.length === 0 ? (
+            <div className="px-5 py-8 text-center text-sm text-[#8b9198]">
+              {transactions.length === 0
+                ? "No transactions yet. They appear here once statements are parsed."
+                : `No transactions match “${search}”.`}
+            </div>
+          ) : (
+            filteredTxns.map((t) => {
+              const amt = formatSigned(
+                t.amount,
+                t.direction,
+                t.bank_account?.currency ?? "USD"
+              );
+              return (
+                <div
+                  key={t.id}
+                  className="grid grid-cols-[1fr_3fr_1.6fr_1.4fr_1.3fr] items-center border-b border-[#f2f4f7] px-5 py-3 text-[13.5px] last:border-0"
+                >
+                  <div className="text-[#6c7378]">
+                    {new Date(t.txn_date).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </div>
+                  <div className="font-semibold text-[#2c2e2f]">
+                    {t.description || t.raw_description || "—"}
+                  </div>
+                  <div className="text-[#6c7378]">
+                    {t.bank_account?.account_name ?? "—"}
+                  </div>
+                  <div>
+                    {t.category ? (
+                      <span className="rounded-[6px] bg-[#eef1f4] px-2.5 py-1 text-[12px] font-semibold text-[#4a5056]">
+                        {t.category}
+                      </span>
+                    ) : (
+                      <span className="text-[#8b9198]">—</span>
+                    )}
+                  </div>
+                  <div
+                    className="text-right font-bold"
+                    style={{ color: amt.positive ? "#1a7f4b" : "#2c2e2f" }}
+                  >
+                    {amt.text}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -3,27 +3,22 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { BankAccountCard } from "@/components/BankAccountCard";
+import {
+  Dialog,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { bankCode, TINTS } from "@/lib/utils";
 import type { BankAccount } from "@/lib/types";
 
-const CURRENCIES = ["USD", "EUR", "GBP", "PKR", "CAD", "AUD", "INR"];
-
-const EMPTY = {
-  bank_name: "",
-  account_name: "",
-  account_number_last4: "",
-  currency: "USD",
-};
+const CURRENCIES = ["AED", "USD", "EUR", "GBP", "SAR"];
+const EMPTY = { bank_name: "", account_name: "", account_number_last4: "", currency: "AED" };
 
 export default function AccountsPage({
   params,
@@ -35,17 +30,18 @@ export default function AccountsPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [form, setForm] = useState({ ...EMPTY });
+  const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState({ ...EMPTY });
   const [saving, setSaving] = useState(false);
 
   async function load() {
-    setLoading(true);
     try {
       const res = await fetch(`/api/bank-accounts?bookId=${bookId}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error);
       setAccounts(json.bankAccounts);
+      setError(null);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -54,16 +50,28 @@ export default function AccountsPage({
   }
 
   useEffect(() => {
-    load();
+    void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookId]);
 
-  function resetForm() {
-    setForm({ ...EMPTY });
+  function openCreate() {
     setEditingId(null);
+    setForm({ ...EMPTY });
+    setOpen(true);
   }
 
-  async function submit() {
+  function openEdit(a: BankAccount) {
+    setEditingId(a.id);
+    setForm({
+      bank_name: a.bank_name,
+      account_name: a.account_name,
+      account_number_last4: a.account_number_last4 ?? "",
+      currency: a.currency,
+    });
+    setOpen(true);
+  }
+
+  async function save() {
     if (!form.bank_name.trim() || !form.account_name.trim()) return;
     setSaving(true);
     setError(null);
@@ -77,23 +85,13 @@ export default function AccountsPage({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error);
-      resetForm();
+      setOpen(false);
       await load();
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setSaving(false);
     }
-  }
-
-  function startEdit(a: BankAccount) {
-    setEditingId(a.id);
-    setForm({
-      bank_name: a.bank_name,
-      account_name: a.account_name,
-      account_number_last4: a.account_number_last4 ?? "",
-      currency: a.currency,
-    });
   }
 
   async function remove(a: BankAccount) {
@@ -110,7 +108,6 @@ export default function AccountsPage({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error);
-      if (editingId === a.id) resetForm();
       await load();
     } catch (err) {
       setError((err as Error).message);
@@ -118,143 +115,182 @@ export default function AccountsPage({
   }
 
   return (
-    <div className="space-y-6">
-      <div>
+    <div className="mz-fade px-10 pb-10 pt-[26px]">
+      <div className="mb-3">
         <Link
           href={`/dashboard/${bookId}`}
-          className="text-sm text-muted-foreground hover:text-foreground"
+          className="text-[13px] font-semibold text-[#6c7378] hover:text-[#0070e0]"
         >
           ← Back to book
         </Link>
-        <h1 className="mt-1 text-2xl font-semibold">Bank accounts</h1>
-        <p className="text-sm text-muted-foreground">
-          Add, edit, or remove the accounts in this book.
-        </p>
+      </div>
+      <div className="mb-[18px] flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-[19px] font-bold text-[#001c64]">Bank accounts</h2>
+          <div className="mt-0.5 text-[13.5px] text-[#6c7378]">
+            Each statement upload is tied to one of these accounts.
+          </div>
+        </div>
+        <Button size="sm" onClick={openCreate}>
+          + Add account
+        </Button>
       </div>
 
       {error && (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+        <p className="mb-4 rounded-[10px] border border-[#c0392b]/30 bg-[#fbeae8] p-3 text-sm text-[#c0392b]">
           {error}
         </p>
       )}
 
-      <div className="grid gap-6 md:grid-cols-[1fr_1.2fr]">
-        {/* Form */}
-        <Card className="h-fit">
-          <CardHeader>
-            <CardTitle>
-              {editingId ? "Edit account" : "Add bank account"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="bank_name">Bank name</Label>
-              <Input
-                id="bank_name"
-                value={form.bank_name}
-                onChange={(e) =>
-                  setForm({ ...form, bank_name: e.target.value })
-                }
-                placeholder="e.g. Chase"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="account_name">Account nickname</Label>
-              <Input
-                id="account_name"
-                value={form.account_name}
-                onChange={(e) =>
-                  setForm({ ...form, account_name: e.target.value })
-                }
-                placeholder="e.g. Business Checking"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="last4">Last 4 digits</Label>
-                <Input
-                  id="last4"
-                  value={form.account_number_last4}
-                  maxLength={4}
-                  inputMode="numeric"
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      account_number_last4: e.target.value.replace(/\D/g, ""),
-                    })
-                  }
-                  placeholder="1234"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="currency">Currency</Label>
-                <Select
-                  id="currency"
-                  value={form.currency}
-                  onChange={(e) =>
-                    setForm({ ...form, currency: e.target.value })
-                  }
-                >
-                  {CURRENCIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            </div>
-            <div className="flex gap-2 pt-1">
-              <Button
-                onClick={submit}
-                disabled={
-                  saving ||
-                  !form.bank_name.trim() ||
-                  !form.account_name.trim()
-                }
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="size-4 animate-spin" /> Saving…
-                  </>
-                ) : editingId ? (
-                  "Save changes"
-                ) : (
-                  "Add account"
-                )}
-              </Button>
-              {editingId && (
-                <Button variant="outline" onClick={resetForm}>
-                  Cancel
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* List */}
-        <div className="space-y-3">
-          {loading ? (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" /> Loading…
-            </div>
-          ) : accounts.length === 0 ? (
-            <Card>
-              <CardContent className="p-6 text-sm text-muted-foreground">
-                No accounts yet. Add your first one on the left.
-              </CardContent>
-            </Card>
-          ) : (
-            accounts.map((a) => (
-              <BankAccountCard
-                key={a.id}
-                account={a}
-                onEdit={startEdit}
-                onDelete={remove}
-              />
-            ))
-          )}
+      {loading ? (
+        <div className="flex items-center gap-2 text-[#6c7378]">
+          <Loader2 className="size-4 animate-spin" /> Loading…
         </div>
-      </div>
+      ) : accounts.length === 0 ? (
+        <div className="rounded-[14px] border border-dashed border-[#c3cbd3] p-12 text-center text-sm text-[#6c7378]">
+          No accounts yet. Add your first one to start uploading statements.
+        </div>
+      ) : (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4">
+          {accounts.map((a, i) => {
+            const t = TINTS[i % TINTS.length];
+            return (
+              <div
+                key={a.id}
+                className="rounded-[14px] border border-[#e6e9ec] bg-white p-5"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="flex size-11 items-center justify-center rounded-[10px] text-[13px] font-bold"
+                      style={{ background: t.bg, color: t.color }}
+                    >
+                      {bankCode(a.bank_name)}
+                    </div>
+                    <div>
+                      <div className="text-[15px] font-bold text-[#001c64]">
+                        {a.account_name}
+                      </div>
+                      <div className="mt-0.5 text-[13px] text-[#6c7378]">
+                        {a.bank_name}
+                      </div>
+                    </div>
+                  </div>
+                  <span className="rounded-[6px] bg-[#eef1f4] px-2.5 py-1 text-[11px] font-bold text-[#4a5056]">
+                    {a.currency}
+                  </span>
+                </div>
+                <div className="mt-[18px] flex items-center justify-between border-t border-[#eef1f4] pt-3.5">
+                  <div className="text-[14px] tracking-[1px] text-[#8b9198]">
+                    •••• {a.account_number_last4 || "0000"}
+                  </div>
+                  <div className="flex gap-3.5">
+                    <button
+                      onClick={() => openEdit(a)}
+                      className="text-[13px] font-semibold text-[#0070e0] hover:underline"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => remove(a)}
+                      className="text-[13px] font-semibold text-[#c0392b] hover:underline"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Account modal */}
+      <Dialog open={open} onOpenChange={setOpen} className="max-w-[460px]">
+        <DialogHeader>
+          <DialogTitle>
+            {editingId ? "Edit account" : "Add bank account"}
+          </DialogTitle>
+          <DialogDescription>
+            Details help match uploaded statements to the right account.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-3.5">
+          <div className="col-span-2 space-y-2">
+            <Label htmlFor="bank_name">Bank name</Label>
+            <Input
+              id="bank_name"
+              value={form.bank_name}
+              onChange={(e) => setForm({ ...form, bank_name: e.target.value })}
+              placeholder="e.g. Emirates NBD"
+              autoFocus
+            />
+          </div>
+          <div className="col-span-2 space-y-2">
+            <Label htmlFor="account_name">Nickname</Label>
+            <Input
+              id="account_name"
+              value={form.account_name}
+              onChange={(e) =>
+                setForm({ ...form, account_name: e.target.value })
+              }
+              placeholder="e.g. Operating"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="last4">Last 4 digits</Label>
+            <Input
+              id="last4"
+              value={form.account_number_last4}
+              maxLength={4}
+              inputMode="numeric"
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  account_number_last4: e.target.value.replace(/\D/g, "").slice(0, 4),
+                })
+              }
+              placeholder="1234"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="currency">Currency</Label>
+            <Select
+              id="currency"
+              value={form.currency}
+              onChange={(e) => setForm({ ...form, currency: e.target.value })}
+            >
+              {CURRENCIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={save}
+            disabled={
+              saving || !form.bank_name.trim() || !form.account_name.trim()
+            }
+          >
+            {saving ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />{" "}
+                {editingId ? "Saving…" : "Adding…"}
+              </>
+            ) : editingId ? (
+              "Save changes"
+            ) : (
+              "Add account"
+            )}
+          </Button>
+        </DialogFooter>
+      </Dialog>
     </div>
   );
 }

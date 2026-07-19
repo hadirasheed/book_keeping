@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     const { data, error } = await supabase
       .from("statements")
       .select(
-        "*, bank_account:bank_accounts!inner(id, bank_name, account_name, book_id)"
+        "*, bank_account:bank_accounts!inner(id, bank_name, account_name, currency, book_id)"
       )
       .eq("bank_account.book_id", bookId)
       .order("uploaded_at", { ascending: false });
