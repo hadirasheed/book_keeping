@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { StatementUploader } from "@/components/StatementUploader";
 import { StatusBadge } from "@/components/StatusBadge";
+import { ProcessButton } from "@/components/ProcessButton";
 import type { BankAccount, StatementWithAccount } from "@/lib/types";
 
 function fileExt(name: string) {
@@ -114,7 +115,14 @@ export default function UploadPage({
                   </div>
                 </div>
               </div>
-              <StatusBadge status={s.status} />
+              <div className="flex items-center gap-3">
+                <StatusBadge status={s.status} />
+                <ProcessButton
+                  statementId={s.id}
+                  status={s.status}
+                  onDone={loadStatements}
+                />
+              </div>
             </div>
           ))
         )}

@@ -3,10 +3,11 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/StatusBadge";
+import { ProcessButton } from "@/components/ProcessButton";
 import { initials, formatSigned } from "@/lib/utils";
 import type {
   BankAccount,
@@ -46,6 +47,37 @@ export default function BookOverviewPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+
+  const [bulkRunning, setBulkRunning] = useState(false);
+
+  // Process every pending/failed statement in sequence with the active model.
+  async function runPending() {
+    const targets = statements.filter(
+      (s) => s.status === "pending" || s.status === "failed"
+    );
+    if (targets.length === 0) return;
+    setBulkRunning(true);
+    try {
+      for (const s of targets) {
+        await fetch(`/api/statements/${s.id}/process`, { method: "POST" });
+        await refresh();
+      }
+    } finally {
+      setBulkRunning(false);
+    }
+  }
+
+  // Re-fetch statements + transactions (used after AI processing).
+  async function refresh() {
+    const [statementsRes, txnsRes] = await Promise.all([
+      fetch(`/api/statements?bookId=${bookId}`),
+      fetch(`/api/transactions?bookId=${bookId}`),
+    ]);
+    const statementsJson = await statementsRes.json();
+    const txnsJson = await txnsRes.json();
+    if (statementsRes.ok) setStatements(statementsJson.statements);
+    if (txnsRes.ok) setTransactions(txnsJson.transactions);
+  }
 
   useEffect(() => {
     (async () => {
@@ -191,49 +223,85 @@ export default function BookOverviewPage({
           <h2 className="text-[17px] font-bold text-[#001c64]">
             Uploaded statements
           </h2>
-          <Link
-            href={`/dashboard/${bookId}/upload`}
-            className="text-[13.5px] font-semibold text-[#0070e0]"
-          >
-            Upload new →
-          </Link>
+          <div className="flex items-center gap-3">
+            {statements.some(
+              (s) => s.status === "pending" || s.status === "failed"
+            ) && (
+              <button
+                onClick={runPending}
+                disabled={bulkRunning}
+                className="inline-flex items-center gap-1.5 rounded-full bg-[#0070e0] px-3.5 py-1.5 text-[12.5px] font-bold text-white transition-colors hover:bg-[#005ecb] disabled:opacity-60"
+              >
+                {bulkRunning ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" /> Running…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="size-3.5" /> Run pending
+                  </>
+                )}
+              </button>
+            )}
+            <Link
+              href={`/dashboard/${bookId}/upload`}
+              className="text-[13.5px] font-semibold text-[#0070e0]"
+            >
+              Upload new →
+            </Link>
+          </div>
         </div>
         <div className="mb-[30px] overflow-hidden rounded-[14px] border border-[#e6e9ec] bg-white max-[820px]:overflow-x-auto">
-          <div className="grid grid-cols-[2.4fr_1.6fr_1.4fr_1fr_1fr] border-b border-[#eef1f4] bg-[#f7f9fb] px-5 py-3 text-[11.5px] font-bold uppercase tracking-[.5px] text-[#8b9198] max-[820px]:min-w-[640px]">
+          <div className="grid grid-cols-[2.2fr_1.4fr_1.1fr_0.6fr_0.9fr_1.4fr] border-b border-[#eef1f4] bg-[#f7f9fb] px-5 py-3 text-[11.5px] font-bold uppercase tracking-[.5px] text-[#8b9198] max-[820px]:min-w-[760px]">
             <div>File</div>
             <div>Account</div>
             <div>Period</div>
             <div>Txns</div>
             <div>Status</div>
+            <div>AI</div>
           </div>
           {statements.length === 0 ? (
             <div className="px-5 py-8 text-center text-sm text-[#8b9198]">
               No statements uploaded yet.
             </div>
           ) : (
-            statements.map((s) => (
-              <div
-                key={s.id}
-                className="grid grid-cols-[2.4fr_1.6fr_1.4fr_1fr_1fr] items-center border-b border-[#f2f4f7] px-5 py-3.5 text-[13.5px] last:border-0 max-[820px]:min-w-[640px]"
-              >
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <div className="flex size-[30px] flex-none items-center justify-center rounded-[7px] bg-[#fbeae8] text-[10px] font-bold text-[#c0392b]">
-                    {fileExt(s.file_name)}
+            statements.map((s) => {
+              const txnCount = transactions.filter(
+                (t) => t.statement_id === s.id
+              ).length;
+              return (
+                <div
+                  key={s.id}
+                  className="grid grid-cols-[2.2fr_1.4fr_1.1fr_0.6fr_0.9fr_1.4fr] items-center border-b border-[#f2f4f7] px-5 py-3.5 text-[13.5px] last:border-0 max-[820px]:min-w-[760px]"
+                >
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <div className="flex size-[30px] flex-none items-center justify-center rounded-[7px] bg-[#fbeae8] text-[10px] font-bold text-[#c0392b]">
+                      {fileExt(s.file_name)}
+                    </div>
+                    <span className="truncate font-semibold text-[#2c2e2f]">
+                      {s.file_name}
+                    </span>
                   </div>
-                  <span className="truncate font-semibold text-[#2c2e2f]">
-                    {s.file_name}
-                  </span>
+                  <div className="truncate text-[#6c7378]">
+                    {s.bank_account?.account_name ?? "—"}
+                  </div>
+                  <div className="text-[#6c7378]">{period(s)}</div>
+                  <div className="font-semibold text-[#2c2e2f]">
+                    {s.status === "done" ? txnCount : "—"}
+                  </div>
+                  <div>
+                    <StatusBadge status={s.status} />
+                  </div>
+                  <div>
+                    <ProcessButton
+                      statementId={s.id}
+                      status={s.status}
+                      onDone={refresh}
+                    />
+                  </div>
                 </div>
-                <div className="truncate text-[#6c7378]">
-                  {s.bank_account?.account_name ?? "—"}
-                </div>
-                <div className="text-[#6c7378]">{period(s)}</div>
-                <div className="font-semibold text-[#2c2e2f]">—</div>
-                <div>
-                  <StatusBadge status={s.status} />
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 

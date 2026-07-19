@@ -113,9 +113,30 @@ run against the project those keys point to, otherwise API calls return a
 3. **Upload a statement** against a chosen account
    (`/dashboard/[bookId]/upload`) → file lands in Storage under
    `statements/{bookId}/{bankAccountId}/{filename}` and a `statements` row is
-   created with status `pending`.
-4. **Settings → Models**: save API keys/model names for Claude/OpenAI/OpenRouter
+   created with status `pending`. Nothing is extracted yet.
+4. **Run the AI** on a statement (the **Run AI** button on the book overview or
+   upload page, or **Run pending** to process them all). This calls the active
+   provider to extract transactions into the combined transactions table and
+   moves the statement `pending → processing → done`.
+5. **Settings → Models**: save API keys/model names for Claude/OpenAI/OpenRouter
    and toggle which one is active (only one active at a time).
+
+## AI statement processing
+
+Uploading only stores the file. Extraction is a separate, explicit step so you
+control when (and with which model) statements are parsed.
+
+- **Trigger:** `POST /api/statements/:id/process`. It requires an **active**
+  provider (Settings → Models), downloads the file from Storage, runs the model,
+  writes the extracted rows into `transactions`, and sets the statement `done`
+  (or `failed`). Re-running replaces that statement's transactions.
+- **Providers:** **Claude** (via the official `@anthropic-ai/sdk`) handles both
+  **PDF and CSV** natively. **OpenAI / OpenRouter** handle **CSV** (their chat
+  endpoints); PDF with those providers returns a clear error — use Claude for PDFs.
+- **Keys:** the provider API keys come from the `ai_model_configs` table (set in
+  Settings), not from environment variables — no extra Vercel env is needed.
+- The model is prompted to return strict JSON; the parser is defensive (strips
+  fences, skips unparseable rows, normalizes sign/`direction`).
 
 ## Project structure
 
@@ -135,16 +156,18 @@ app/
     books/                       GET (list) / POST (create)
     bank-accounts/               GET / POST / PATCH / DELETE
     statements/                  GET (list, joined) / POST (upload)
+    statements/[id]/process/     POST (run active model → extract transactions)
     transactions/                GET (filters: account, date range)
     ai-models/                   GET (masked) / POST (upsert by provider)
     ai-models/[id]/activate/     PATCH (activate one, deactivate others)
 components/
   ui/                            shadcn-style primitives
-  BookCard, BankAccountCard, StatementUploader, ModelConfigCard, StatusBadge,
-  LogoutButton
+  Sidebar, StatementUploader, ModelConfigCard, StatusBadge, ProcessButton,
+  MizanLogo
 lib/
   supabase.ts                    browser client (anon key)
   supabase-server.ts             server client (service role) + default user
+  ai/extract.ts                  provider adapters + JSON parser for extraction
   auth.ts                        session cookie sign/verify (Web Crypto)
   types.ts                       DB-mirrored TypeScript types
   utils.ts                       cn(), maskApiKey(), formatAmount()
@@ -154,9 +177,9 @@ supabase/migrations/0001_init.sql, 0002_auth.sql
 ## Non-goals (not built yet)
 
 - Only a single shared PIN — no per-user accounts, signup, or password reset.
-- **No AI extraction** of transactions from files yet — the upload → Storage →
-  DB record flow works end-to-end; parsing into `transactions` is a follow-up.
-  Statements stay `pending` after upload.
+- AI extraction runs **synchronously** inside the request (fine for MVP-sized
+  statements); there's no background queue or streaming progress yet, and
+  per-provider PDF support varies (Claude only).
 - No charts/insights.
 - **API keys are stored in plain text** (`ai_model_configs.api_key`). This is
   flagged with a `TODO` in the API route and SQL — encrypt before any real launch.
