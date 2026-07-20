@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServiceClient, getDefaultUserId } from "@/lib/supabase-server";
+import { getServiceClient } from "@/lib/supabase-server";
+import { getCurrentUserId } from "@/lib/auth-user";
 
 // GET /api/books — list all books for the default user, each with derived
 // counts (accounts / statements / transactions) for the dashboard cards.
 export async function GET() {
   try {
     const supabase = getServiceClient();
-    const userId = await getDefaultUserId();
+    const userId = await getCurrentUserId();
 
     const { data: books, error } = await supabase
       .from("books")
@@ -83,7 +84,7 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = getServiceClient();
-    const userId = await getDefaultUserId();
+    const userId = await getCurrentUserId();
     const { data, error } = await supabase
       .from("books")
       .insert({

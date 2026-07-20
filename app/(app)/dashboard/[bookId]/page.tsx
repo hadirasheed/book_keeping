@@ -10,7 +10,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { ProcessButton, type ActionMessage } from "@/components/ProcessButton";
 import { DeleteStatementButton } from "@/components/DeleteStatementButton";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { initials, formatSigned } from "@/lib/utils";
+import { initials, formatSigned, currencyLabel } from "@/lib/utils";
 import type {
   BankAccount,
   Book,
@@ -204,7 +204,7 @@ export default function BookOverviewPage({
       sum + (t.direction === "credit" ? Math.abs(t.amount) : -Math.abs(t.amount)),
     0
   );
-  const balCurrency = transactions[0]?.bank_account?.currency ?? "USD";
+  const balCurrency = transactions[0]?.bank_account?.currency ?? "KWD";
 
   if (loading) {
     return (
@@ -268,10 +268,10 @@ export default function BookOverviewPage({
             </div>
             <div className="mt-1.5 text-[24px] font-bold">
               {transactions.length
-                ? `${balCurrency} ${balance.toLocaleString("en-US", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}`
+                ? `${currencyLabel(balCurrency)} ${balance.toLocaleString(
+                    "en-US",
+                    { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+                  )}`
                 : "—"}
             </div>
           </div>

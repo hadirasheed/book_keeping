@@ -1,41 +1,68 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AUTH_COOKIE, verifySessionToken } from "@/lib/auth";
+import { createServerClient } from "@supabase/ssr";
 
-// Route protection for the PIN gate. Runs on the Edge runtime and only inspects
-// the signed session cookie — it never touches the database or the PIN.
+// Auth gate backed by Supabase Auth (Google OAuth). Refreshes the session
+// cookie on every request, redirects unauthenticated users to /login, and
+// restricts /admin (and admin APIs) to the configured ADMIN_EMAIL.
 export async function middleware(req: NextRequest) {
-  const { pathname, search } = req.nextUrl;
+  const res = NextResponse.next();
 
-  const isLogin = pathname === "/login";
-  const isAuthApi = pathname.startsWith("/api/auth/");
-
-  // Auth endpoints are always reachable (that's how you log in/out).
-  if (isAuthApi) return NextResponse.next();
-
-  const token = req.cookies.get(AUTH_COOKIE)?.value;
-  const authed = await verifySessionToken(token);
-
-  if (isLogin) {
-    // Already signed in? Skip the login screen.
-    if (authed) {
-      return NextResponse.redirect(new URL("/dashboard", req.url));
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
+    {
+      cookies: {
+        getAll() {
+          return req.cookies.getAll();
+        },
+        setAll(list) {
+          list.forEach(({ name, value, options }) =>
+            res.cookies.set(name, value, options)
+          );
+        },
+      },
     }
-    return NextResponse.next();
+  );
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { pathname, search } = req.nextUrl;
+  const isPublic = pathname === "/login" || pathname.startsWith("/auth/");
+
+  if (!user) {
+    if (isPublic) return res;
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const loginUrl = new URL("/login", req.url);
+    loginUrl.searchParams.set("next", pathname + search);
+    return NextResponse.redirect(loginUrl);
   }
 
-  if (authed) return NextResponse.next();
-
-  // Not authenticated: 401 for API calls, redirect to /login for pages.
-  if (pathname.startsWith("/api/")) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Authenticated — keep users off the login page.
+  if (pathname === "/login") {
+    return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 
-  const loginUrl = new URL("/login", req.url);
-  loginUrl.searchParams.set("next", pathname + search);
-  return NextResponse.redirect(loginUrl);
+  // Admin gate.
+  const admin = (process.env.ADMIN_EMAIL ?? "").trim().toLowerCase();
+  const isAdmin = Boolean(admin) && user.email?.toLowerCase() === admin;
+  const adminScoped =
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/api/admin") ||
+    pathname.startsWith("/api/ai-models");
+  if (adminScoped && !isAdmin) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Admin only" }, { status: 403 });
+    }
+    return NextResponse.redirect(new URL("/dashboard", req.url));
+  }
+
+  return res;
 }
 
 export const config = {
-  // Run on everything except Next internals and static asset files.
   matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.[^/]+$).*)"],
 };

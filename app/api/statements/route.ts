@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/supabase-server";
+import { getCurrentUserId } from "@/lib/auth-user";
+import {
+  userOwnsAccount,
+  userOwnsBook,
+  userOwnsStatement,
+} from "@/lib/ownership";
 
 const BUCKET = "statements";
+const DENIED = NextResponse.json({ error: "Not found" }, { status: 404 });
 
 // GET /api/statements?bookId= — list statements for a book, joined with the
 // bank account name. Ordered newest first.
@@ -11,6 +18,8 @@ export async function GET(req: NextRequest) {
     if (!bookId) {
       return NextResponse.json({ error: "bookId is required" }, { status: 400 });
     }
+    const userId = await getCurrentUserId();
+    if (!(await userOwnsBook(bookId, userId))) return DENIED;
     const supabase = getServiceClient();
     const { data, error } = await supabase
       .from("statements")
@@ -45,6 +54,8 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    const userId = await getCurrentUserId();
+    if (!(await userOwnsAccount(bankAccountId, userId))) return DENIED;
 
     const supabase = getServiceClient();
 
@@ -92,6 +103,8 @@ export async function DELETE(req: NextRequest) {
     if (!id) {
       return NextResponse.json({ error: "id is required" }, { status: 400 });
     }
+    const userId = await getCurrentUserId();
+    if (!(await userOwnsStatement(id, userId))) return DENIED;
     const supabase = getServiceClient();
 
     // Look up the storage path first so we can clean up the file.

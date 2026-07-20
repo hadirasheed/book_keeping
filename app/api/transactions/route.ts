@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/supabase-server";
+import { getCurrentUserId } from "@/lib/auth-user";
+import { userOwnsBook } from "@/lib/ownership";
 
 // GET /api/transactions?bookId=&bankAccountId=&from=&to=
 // Lists transactions across all accounts in a book, with optional filters:
@@ -15,6 +17,11 @@ export async function GET(req: NextRequest) {
     const bankAccountId = params.get("bankAccountId");
     const from = params.get("from");
     const to = params.get("to");
+
+    const userId = await getCurrentUserId();
+    if (!(await userOwnsBook(bookId, userId))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
 
     const supabase = getServiceClient();
     let query = supabase

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/supabase-server";
+import { getCurrentUserId } from "@/lib/auth-user";
+import { userOwnsBook } from "@/lib/ownership";
 
 interface Row {
   id: string;
@@ -48,6 +50,10 @@ export async function GET(req: NextRequest) {
     if (!bookId) {
       return NextResponse.json({ error: "bookId is required" }, { status: 400 });
     }
+    const userId = await getCurrentUserId();
+    if (!(await userOwnsBook(bookId, userId))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     const ids = await findDuplicateIds(bookId);
     return NextResponse.json({ duplicates: ids.length });
   } catch (err) {
@@ -64,6 +70,10 @@ export async function POST(req: NextRequest) {
     const bookId = req.nextUrl.searchParams.get("bookId");
     if (!bookId) {
       return NextResponse.json({ error: "bookId is required" }, { status: 400 });
+    }
+    const userId = await getCurrentUserId();
+    if (!(await userOwnsBook(bookId, userId))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     const ids = await findDuplicateIds(bookId);
     if (ids.length > 0) {

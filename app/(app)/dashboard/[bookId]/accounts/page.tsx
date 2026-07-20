@@ -17,8 +17,8 @@ import {
 import { bankCode, TINTS } from "@/lib/utils";
 import type { BankAccount } from "@/lib/types";
 
-const CURRENCIES = ["AED", "USD", "EUR", "GBP", "SAR"];
-const EMPTY = { bank_name: "", account_name: "", account_number_last4: "", currency: "AED" };
+const CURRENCIES = ["KWD", "USD", "EUR", "GBP", "SAR", "AED"];
+const EMPTY = { bank_name: "", account_name: "", account_number_last4: "", currency: "KWD" };
 
 export default function AccountsPage({
   params,

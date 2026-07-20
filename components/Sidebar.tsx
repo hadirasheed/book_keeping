@@ -3,10 +3,17 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, Menu } from "lucide-react";
+import { LogOut, Menu, ShieldCheck } from "lucide-react";
 import { MizanLogo } from "@/components/MizanLogo";
+import { createBrowserSupabase } from "@/lib/supabase-browser";
 import type { Book } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+interface Me {
+  email: string;
+  name: string | null;
+  isAdmin: boolean;
+}
 
 // Grid icon for Dashboard.
 function GridIcon() {
@@ -20,20 +27,6 @@ function GridIcon() {
   );
 }
 
-// Sliders icon for Settings.
-function SlidersIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden>
-      <line x1="3" y1="4.5" x2="15" y2="4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <line x1="3" y1="9" x2="15" y2="9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <line x1="3" y1="13.5" x2="15" y2="13.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <circle cx="11" cy="4.5" r="2.2" fill="#001c64" stroke="currentColor" strokeWidth="1.8" />
-      <circle cx="6" cy="9" r="2.2" fill="#001c64" stroke="currentColor" strokeWidth="1.8" />
-      <circle cx="12" cy="13.5" r="2.2" fill="#001c64" stroke="currentColor" strokeWidth="1.8" />
-    </svg>
-  );
-}
-
 const navItem =
   "flex items-center gap-3 rounded-[10px] px-3.5 py-2.5 text-[14.5px] font-semibold transition-colors text-left";
 const subItem =
@@ -43,6 +36,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [books, setBooks] = useState<Book[]>([]);
+  const [me, setMe] = useState<Me | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
   // Off-canvas drawer state (only relevant below the 820px breakpoint).
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -60,6 +54,13 @@ export function Sidebar() {
       .catch(() => {});
   }, [bookId]);
 
+  useEffect(() => {
+    fetch("/api/me")
+      .then((r) => r.json())
+      .then((j) => setMe(j?.email ? j : null))
+      .catch(() => {});
+  }, []);
+
   // Auto-close the drawer on any navigation.
   useEffect(() => {
     setDrawerOpen(false);
@@ -68,15 +69,18 @@ export function Sidebar() {
   const currentBook = books.find((b) => b.id === bookId);
 
   const onDashboard = pathname === "/dashboard";
-  const onSettings = pathname.startsWith("/settings");
+  const onAdmin = pathname.startsWith("/admin");
 
   const active = "bg-white/[.14] text-white";
   const inactive = "text-[#a9c2e8] hover:bg-white/[.06]";
 
+  const displayName = me?.name || me?.email?.split("@")[0] || "Account";
+  const avatarInitial = (me?.name || me?.email || "?").charAt(0).toUpperCase();
+
   async function logout() {
     setLoggingOut(true);
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
+      await createBrowserSupabase().auth.signOut();
       router.replace("/login");
       router.refresh();
     } finally {
@@ -134,13 +138,15 @@ export function Sidebar() {
           <GridIcon />
           Dashboard
         </Link>
-        <Link
-          href="/settings/models"
-          className={cn(navItem, onSettings ? active : inactive)}
-        >
-          <SlidersIcon />
-          Settings
-        </Link>
+        {me?.isAdmin && (
+          <Link
+            href="/admin"
+            className={cn(navItem, onAdmin ? active : inactive)}
+          >
+            <ShieldCheck className="size-[18px]" />
+            Admin
+          </Link>
+        )}
       </nav>
 
       {/* Book sub-nav */}
@@ -179,12 +185,14 @@ export function Sidebar() {
       <div className="mt-auto border-t border-white/[.12] pt-3">
         <div className="flex items-center gap-[11px] px-2.5 pt-3">
           <div className="flex size-9 items-center justify-center rounded-full bg-[#009cde] text-[14px] font-bold text-[#001c64]">
-            DU
+            {avatarInitial}
           </div>
           <div className="min-w-0">
-            <div className="truncate text-[13.5px] font-semibold">Demo User</div>
+            <div className="truncate text-[13.5px] font-semibold">
+              {displayName}
+            </div>
             <div className="truncate text-[12px] text-[#8fb4e8]">
-              Mizan workspace
+              {me?.email ?? ""}
             </div>
           </div>
         </div>

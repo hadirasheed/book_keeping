@@ -2,8 +2,9 @@
 
 Upload bank statements organized under **Books** (ledgers/projects), each holding
 one or more **Bank Accounts**. Statements are uploaded against a specific bank
-account. A **Settings → Models** page manages AI providers (Claude, OpenAI,
-OpenRouter) used later for statement parsing.
+account and parsed by AI. AI providers (Claude, OpenAI, OpenRouter) are managed
+centrally in the **admin panel**. Ledger amounts default to **KWD** (shown as
+"K.D") and otherwise follow each account's currency.
 
 The UI follows the **Mizan** design handoff — a navy + bright-blue fintech shell
 with a fixed left sidebar (see `Mizan.dc.html` reference). Components are
@@ -12,35 +13,36 @@ single **820px** breakpoint: below it the sidebar becomes an off-canvas drawer
 (hamburger top bar + scrim), grids collapse to one column, tables scroll
 horizontally, and header rows wrap.
 
-Access is gated by a simple **4-digit PIN** (see "PIN login" below). Beyond the
-gate there are no per-user accounts yet — all data is attributed to a single
-seeded default user (`demo@local.dev`), so the schema stays auth-ready.
+Access is **per-user via Google sign-in** (Supabase Auth). Each user's Books,
+accounts, statements and transactions are private to them. A single **admin**
+(the `ADMIN_EMAIL` Google account) gets an extra `/admin` panel.
 
-## PIN login
+## Authentication (Google OAuth)
 
-A single shared 4-digit PIN protects the whole app.
+- Sign-up and sign-in both go through **Google OAuth**, handled by **Supabase
+  Auth**. The only extra field is the user's **name** (collected once, on
+  `/onboarding`, after the first Google sign-in).
+- `middleware.ts` refreshes the session on every request and redirects
+  unauthenticated visitors to `/login`. Route handlers resolve the current user
+  from the session and enforce **per-user ownership** (a user can't read another
+  user's books/accounts/statements/transactions).
+- The **admin panel** (`/admin`) is restricted to the `ADMIN_EMAIL` account —
+  enforced in middleware *and* re-checked in the admin API routes.
+- Sign-out clears the Supabase session.
 
-- The PIN lives in the `app_auth` table (created by
-  `supabase/migrations/0002_auth.sql`). That table has **RLS enabled with no
-  policies**, so it is *not* readable through the public/anon API — only
-  server code using the service-role key can read it. The PIN is verified
-  server-side and is **never sent to the browser**.
-- On success the server sets a signed, httpOnly cookie (an HMAC of the expiry
-  using `AUTH_SECRET` — the PIN is not in the cookie). `middleware.ts` checks
-  this cookie on every request and redirects to `/login` when it's missing,
-  invalid, or expired (7-day sessions).
-- **Default PIN is `1234`.** Change it any time directly in the database:
+**Setup:** in your Supabase project, **Authentication → Providers → Google**,
+add your Google OAuth client id/secret, and add your site URL plus
+`<site>/auth/callback` to the allowed redirect URLs. Set `ADMIN_EMAIL` to the
+Google address that should own the admin panel. (The old PIN gate is gone;
+`AUTH_SECRET` is no longer used.)
 
-  ```sql
-  update app_auth set pin = '4271', updated_at = now() where id = 1;
-  ```
+## Admin panel (`/admin`)
 
-- Set `AUTH_SECRET` in your environment (`openssl rand -hex 32`). Changing it
-  invalidates existing sessions.
-
-> A 4-digit PIN is low-entropy by design (10,000 combinations); the login route
-> adds a small delay per attempt but this is meant as a lightweight gate, not
-> hardened auth. Swap in real per-user auth before handling anything sensitive.
+Visible only to `ADMIN_EMAIL`. It shows platform **stats** (users, books,
+statements, transactions, total AI tokens), a **users** table with **per-user AI
+token usage** and last-login, and central **AI model management** (the provider
+cards moved here — regular users no longer configure models; everyone's
+extraction uses the single active provider set by the admin).
 
 ## Tech stack
 
@@ -65,8 +67,12 @@ Copy `.env.example` to `.env.local` and fill in your project values
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-AUTH_SECRET=          # openssl rand -hex 32
+ADMIN_EMAIL=          # the Google account allowed into /admin
 ```
+
+Also enable the **Google provider** in Supabase (Authentication → Providers →
+Google) with your Google OAuth client, and add `<site>/auth/callback` to the
+allowed redirect URLs.
 
 ### 3. Run the database migrations
 
@@ -78,6 +84,8 @@ Run both files in the Supabase SQL editor (or via the CLI), in order:
    the `app_auth` PIN table (default PIN `1234`).
 3. [`supabase/migrations/0003_model_toggle_usage.sql`](./supabase/migrations/0003_model_toggle_usage.sql)
    — adds `enabled` + token-usage columns to `ai_model_configs`.
+4. [`supabase/migrations/0004_google_auth.sql`](./supabase/migrations/0004_google_auth.sql)
+   — adds per-user token-usage + last-login columns to `users` (Google auth).
 
 Full instructions: [`supabase/README.md`](./supabase/README.md).
 
@@ -120,10 +128,12 @@ run against the project those keys point to, otherwise API calls return a
    upload page, or **Run pending** to process them all). This calls the active
    provider to extract transactions into the combined transactions table and
    moves the statement `pending → processing → done`.
-5. **Settings → Models**: save API keys/model names for Claude/OpenAI/OpenRouter,
-   **enable/disable** each provider, **Test connection** (a live ping that reports
-   the reply + token usage), see **cumulative token usage**, and toggle which one
-   is **active** (only one active at a time; a disabled provider can't be active).
+5. **Admin → AI models** (admin only): save API keys/model names for
+   Claude/OpenAI/OpenRouter, **enable/disable** each provider, **Test connection**
+   (a live ping that reports the reply + token usage), see **cumulative token
+   usage**, and toggle which one is **active** (one active at a time; a disabled
+   provider can't be active). Regular users don't see model settings — everyone's
+   extraction uses the active provider.
 
 ## AI statement processing
 
@@ -149,50 +159,54 @@ control when (and with which model) statements are parsed.
   **PDF and CSV** natively. **OpenAI / OpenRouter** handle **CSV** (their chat
   endpoints); PDF with those providers returns a clear error — use Claude for PDFs.
 - **Keys:** the provider API keys come from the `ai_model_configs` table (set in
-  Settings), not from environment variables — no extra Vercel env is needed.
+  the admin panel), not from environment variables — no extra Vercel env for keys.
+- **Per-user token usage** is recorded on the `users` table each run and shown in
+  the admin panel.
 - The model is prompted to return strict JSON; the parser is defensive (strips
   fences, skips unparseable rows, normalizes sign/`direction`).
 
 ## Project structure
 
 ```
-middleware.ts                    PIN gate: protects all routes, redirects to /login
+middleware.ts                    Supabase Auth gate + admin-email gate
 app/
-  login/                         4-digit PIN entry screen
-  (app)/                         authenticated area (route group, no URL segment)
-    layout.tsx                   header + nav + log out
+  login/                         Google OAuth split-screen login
+  onboarding/                    name step after first Google sign-in
+  auth/callback/                 OAuth code exchange → create profile → route
+  (app)/                         authenticated area (route group, sidebar shell)
     dashboard/                   Books list + New Book
       [bookId]/                  Book detail: accounts, statements, transactions
         accounts/                Manage bank accounts (add/edit/delete)
         upload/                  Upload a statement (pick account → drop file)
-    settings/models/             AI provider management
+    admin/                       Admin panel (stats, users, AI models) — admin only
   api/
-    auth/login, auth/logout      PIN check → signed cookie; clear cookie
+    me/                          GET/PATCH current user (name, isAdmin)
+    admin/stats, admin/users     Platform stats + per-user token usage (admin)
     books/                       GET (list) / POST (create)
     bank-accounts/               GET / POST / PATCH / DELETE
     statements/                  GET (list) / POST (upload) / DELETE (file + rows)
     statements/[id]/process/     POST (run active model → extract transactions)
     transactions/                GET (filters: account, date range)
     transactions/dedupe/         GET (count) / POST (remove duplicate rows)
-    ai-models/                   GET (masked) / POST (upsert by provider)
-    ai-models/[id]/activate/     PATCH (activate one, deactivate others)
+    ai-models/ (+/[id], activate, ping)  Provider config — admin only
 components/
-  ui/                            shadcn-style primitives
-  Sidebar, StatementUploader, ModelConfigCard, StatusBadge, ProcessButton,
-  MizanLogo
+  ui/                            shadcn-style primitives (Dialog, ConfirmDialog…)
+  Sidebar, StatementUploader, ModelConfigCard, ProcessButton,
+  DeleteStatementButton, StatusBadge, MizanLogo
 lib/
-  supabase.ts                    browser client (anon key)
-  supabase-server.ts             server client (service role) + default user
+  supabase-ssr.ts                cookie-bound server auth client (@supabase/ssr)
+  supabase-browser.ts            browser auth client (OAuth sign-in / sign-out)
+  supabase-server.ts             service-role client (privileged data ops)
+  auth-user.ts                   current user + admin resolution
+  ownership.ts                   per-user book/account/statement guards
   ai/extract.ts                  provider adapters + JSON parser for extraction
-  auth.ts                        session cookie sign/verify (Web Crypto)
-  types.ts                       DB-mirrored TypeScript types
-  utils.ts                       cn(), maskApiKey(), formatAmount()
-supabase/migrations/0001_init.sql, 0002_auth.sql
+  types.ts / utils.ts            DB types; cn(), currencyLabel(), formatSigned()…
+supabase/migrations/0001…0004.sql
 ```
 
 ## Non-goals (not built yet)
 
-- Only a single shared PIN — no per-user accounts, signup, or password reset.
+- No org/team accounts or roles beyond a single `ADMIN_EMAIL`; no invitations.
 - AI extraction runs **synchronously** inside the request (fine for MVP-sized
   statements); there's no background queue or streaming progress yet, and
   per-provider PDF support varies (Claude only).

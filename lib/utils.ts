@@ -59,18 +59,29 @@ export function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
+// Short display symbols for currencies (default ledger currency is KWD → "K.D").
+const CURRENCY_LABELS: Record<string, string> = { KWD: "K.D" };
+
+/** Display label for a currency code, e.g. "KWD" -> "K.D". */
+export function currencyLabel(code: string): string {
+  return CURRENCY_LABELS[code] ?? code;
+}
+
 /** Group a signed amount for display: sign, currency, absolute value. */
 export function formatSigned(
   amount: number,
   direction: "debit" | "credit" | null,
-  currency = "USD"
+  currency = "KWD"
 ): { text: string; positive: boolean } {
   const positive = direction ? direction === "credit" : amount >= 0;
   const abs = Math.abs(amount).toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-  return { text: `${positive ? "+" : "-"}${currency} ${abs}`, positive };
+  return {
+    text: `${positive ? "+" : "-"}${currencyLabel(currency)} ${abs}`,
+    positive,
+  };
 }
 
 /** Two-letter code from a bank name, e.g. "Emirates NBD" -> "EM". */

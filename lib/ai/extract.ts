@@ -218,7 +218,7 @@ async function extractWithOpenAICompatible(
 ): Promise<ExtractResult> {
   if (file.isPdf) {
     throw new Error(
-      "PDF parsing is currently supported only with the Claude provider. Upload a CSV, or set Claude active in Settings → Models."
+      "PDF parsing is currently supported only with the Claude provider. Upload a CSV, or ask an admin to set Claude active in the admin panel."
     );
   }
   const csv = Buffer.from(file.bytes).toString("utf-8");

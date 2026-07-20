@@ -25,6 +25,22 @@ Run both migration files, **in order**:
    (default `1234`, RLS-locked so it's not exposed via the public API).
 3. `migrations/0003_model_toggle_usage.sql` — adds `enabled`, `input_tokens`,
    `output_tokens`, and `last_tested_at` to `ai_model_configs`.
+4. `migrations/0004_google_auth.sql` — adds per-user `input_tokens`,
+   `output_tokens`, and `last_login_at` to `users` (Google auth).
+
+## Enable Google sign-in
+
+Auth is Google OAuth via Supabase Auth. In the dashboard:
+
+- **Authentication → Providers → Google**: enable it and paste your Google OAuth
+  **client id + secret** (from Google Cloud Console → Credentials → OAuth client).
+- **Authentication → URL Configuration**: set the Site URL and add
+  `<site>/auth/callback` (and `http://localhost:3000/auth/callback` for local dev)
+  to the **Redirect URLs**.
+- In Google Cloud, add the same callback plus the Supabase-provided
+  `https://<project>.supabase.co/auth/v1/callback` as authorized redirect URIs.
+
+Set `ADMIN_EMAIL` in the app env to the Google address that should own `/admin`.
 
 ### Option A — SQL editor (fastest)
 

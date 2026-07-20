@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/supabase-server";
+import { getCurrentUserId } from "@/lib/auth-user";
+import { userOwnsStatement } from "@/lib/ownership";
 import { extractTransactions } from "@/lib/ai/extract";
 import type { AIModelConfig } from "@/lib/types";
 
@@ -15,6 +17,17 @@ export async function POST(
 ) {
   const { id } = await params;
   const supabase = getServiceClient();
+
+  // Must own the statement.
+  let userId: string;
+  try {
+    userId = await getCurrentUserId();
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!(await userOwnsStatement(id, userId))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   // Load the statement (need bank_account_id + storage path).
   const { data: statement, error: stErr } = await supabase
@@ -34,7 +47,7 @@ export async function POST(
     .maybeSingle();
   if (!config) {
     return NextResponse.json(
-      { error: "No active AI model. Choose one in Settings → Models." },
+      { error: "No active AI model. Ask an admin to set one active in the admin panel." },
       { status: 400 }
     );
   }
@@ -79,7 +92,7 @@ export async function POST(
       if (insErr) throw insErr;
     }
 
-    // Accumulate token usage on the provider config.
+    // Accumulate token usage on the provider config and on the user.
     await supabase
       .from("ai_model_configs")
       .update({
@@ -87,6 +100,21 @@ export async function POST(
         output_tokens: cfg.output_tokens + usage.output_tokens,
       })
       .eq("id", cfg.id);
+
+    const { data: usr } = await supabase
+      .from("users")
+      .select("input_tokens, output_tokens")
+      .eq("id", userId)
+      .single();
+    if (usr) {
+      await supabase
+        .from("users")
+        .update({
+          input_tokens: (usr.input_tokens ?? 0) + usage.input_tokens,
+          output_tokens: (usr.output_tokens ?? 0) + usage.output_tokens,
+        })
+        .eq("id", userId);
+    }
 
     await supabase
       .from("statements")

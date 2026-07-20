@@ -9,6 +9,9 @@ export interface User {
   id: string;
   email: string;
   name: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  last_login_at: string | null;
   created_at: string;
 }
 

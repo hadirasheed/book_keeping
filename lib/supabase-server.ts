@@ -26,28 +26,3 @@ export function getServiceClient(): SupabaseClient {
   }
   return cached;
 }
-
-const DEFAULT_USER_EMAIL = "demo@local.dev";
-let cachedUserId: string | null = null;
-
-/**
- * Resolve the id of the single seeded default user. The schema is auth-ready,
- * but for the MVP every write is attributed to this one user.
- */
-export async function getDefaultUserId(): Promise<string> {
-  if (cachedUserId) return cachedUserId;
-  const client = getServiceClient();
-  const { data, error } = await client
-    .from("users")
-    .select("id")
-    .eq("email", DEFAULT_USER_EMAIL)
-    .single();
-
-  if (error || !data) {
-    throw new Error(
-      `Default user (${DEFAULT_USER_EMAIL}) not found. Did you run the migration in supabase/migrations/0001_init.sql?`
-    );
-  }
-  cachedUserId = data.id as string;
-  return cachedUserId;
-}
