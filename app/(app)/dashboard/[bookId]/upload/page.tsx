@@ -7,6 +7,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { StatementUploader } from "@/components/StatementUploader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ProcessButton, type ActionMessage } from "@/components/ProcessButton";
+import { DeleteStatementButton } from "@/components/DeleteStatementButton";
 import type { BankAccount, StatementWithAccount } from "@/lib/types";
 
 function fileExt(name: string) {
@@ -137,12 +138,26 @@ export default function UploadPage({
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <StatusBadge status={s.status} />
                 <ProcessButton
                   statementId={s.id}
                   fileName={s.file_name}
                   status={s.status}
+                  warnDuplicate={
+                    statements.some(
+                      (o) =>
+                        o.id !== s.id &&
+                        o.file_name === s.file_name &&
+                        o.status === "done"
+                    ) && s.status !== "done"
+                  }
+                  onDone={loadStatements}
+                  onMessage={setBanner}
+                />
+                <DeleteStatementButton
+                  statementId={s.id}
+                  fileName={s.file_name}
                   onDone={loadStatements}
                   onMessage={setBanner}
                 />

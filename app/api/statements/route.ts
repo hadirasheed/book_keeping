@@ -83,3 +83,37 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+// DELETE /api/statements?id= — remove a statement, its Storage file, and its
+// transactions (transactions cascade via the FK on delete).
+export async function DELETE(req: NextRequest) {
+  try {
+    const id = req.nextUrl.searchParams.get("id");
+    if (!id) {
+      return NextResponse.json({ error: "id is required" }, { status: 400 });
+    }
+    const supabase = getServiceClient();
+
+    // Look up the storage path first so we can clean up the file.
+    const { data: statement } = await supabase
+      .from("statements")
+      .select("file_url")
+      .eq("id", id)
+      .single();
+
+    const { error } = await supabase.from("statements").delete().eq("id", id);
+    if (error) throw error;
+
+    // Best-effort file removal (don't fail the request if the object is gone).
+    if (statement?.file_url) {
+      await supabase.storage.from(BUCKET).remove([statement.file_url]);
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return NextResponse.json(
+      { error: (err as Error).message },
+      { status: 500 }
+    );
+  }
+}

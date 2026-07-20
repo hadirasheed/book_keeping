@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ProcessButton, type ActionMessage } from "@/components/ProcessButton";
+import { DeleteStatementButton } from "@/components/DeleteStatementButton";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { initials, formatSigned } from "@/lib/utils";
 import type {
   BankAccount,
@@ -50,6 +52,56 @@ export default function BookOverviewPage({
 
   const [bulkRunning, setBulkRunning] = useState(false);
   const [banner, setBanner] = useState<ActionMessage | null>(null);
+  const [dedupeOpen, setDedupeOpen] = useState(false);
+  const [dedupeCount, setDedupeCount] = useState(0);
+  const [dedupeBusy, setDedupeBusy] = useState(false);
+
+  // File names that already have a processed (done) statement — used to warn
+  // before re-processing a same-named upload (the duplicate-data path).
+  const doneFileNames = new Set(
+    statements.filter((s) => s.status === "done").map((s) => s.file_name)
+  );
+
+  // Check for duplicate transactions and, if any, open a confirmation to remove.
+  async function checkDuplicates() {
+    setBanner(null);
+    try {
+      const res = await fetch(`/api/transactions/dedupe?bookId=${bookId}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      if (json.duplicates === 0) {
+        setBanner({ ok: true, text: "No duplicate transactions found." });
+      } else {
+        setDedupeCount(json.duplicates);
+        setDedupeOpen(true);
+      }
+    } catch (err) {
+      setBanner({ ok: false, text: (err as Error).message });
+    }
+  }
+
+  async function runDedupe() {
+    setDedupeBusy(true);
+    try {
+      const res = await fetch(`/api/transactions/dedupe?bookId=${bookId}`, {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      setBanner({
+        ok: true,
+        text: `Removed ${json.removed} duplicate transaction${
+          json.removed === 1 ? "" : "s"
+        }.`,
+      });
+      await refresh();
+    } catch (err) {
+      setBanner({ ok: false, text: (err as Error).message });
+    } finally {
+      setDedupeBusy(false);
+      setDedupeOpen(false);
+    }
+  }
 
   // Process every pending/failed statement in sequence with the active model.
   async function runPending() {
@@ -323,9 +375,16 @@ export default function BookOverviewPage({
                     <div className="flex size-[30px] flex-none items-center justify-center rounded-[7px] bg-[#fbeae8] text-[10px] font-bold text-[#c0392b]">
                       {fileExt(s.file_name)}
                     </div>
-                    <span className="truncate font-semibold text-[#2c2e2f]">
-                      {s.file_name}
-                    </span>
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold text-[#2c2e2f]">
+                        {s.file_name}
+                      </div>
+                      {s.status === "done" && (
+                        <div className="truncate text-[11px] text-[#1a7f4b]">
+                          Read by AI · {txnCount} added
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div className="truncate text-[#6c7378]">
                     {s.bank_account?.account_name ?? "—"}
@@ -337,11 +396,21 @@ export default function BookOverviewPage({
                   <div>
                     <StatusBadge status={s.status} />
                   </div>
-                  <div>
+                  <div className="flex items-center gap-2">
                     <ProcessButton
                       statementId={s.id}
                       fileName={s.file_name}
                       status={s.status}
+                      warnDuplicate={
+                        // another *different* statement with the same name is done
+                        doneFileNames.has(s.file_name) && s.status !== "done"
+                      }
+                      onDone={refresh}
+                      onMessage={setBanner}
+                    />
+                    <DeleteStatementButton
+                      statementId={s.id}
+                      fileName={s.file_name}
                       onDone={refresh}
                       onMessage={setBanner}
                     />
@@ -357,12 +426,22 @@ export default function BookOverviewPage({
           <h2 className="text-[17px] font-bold text-[#001c64]">
             Combined transactions
           </h2>
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search transactions…"
-            className="h-10 w-[260px] rounded-full max-[820px]:w-full"
-          />
+          <div className="flex items-center gap-3 max-[820px]:w-full">
+            {transactions.length > 0 && (
+              <button
+                onClick={checkDuplicates}
+                className="whitespace-nowrap rounded-full border-[1.5px] border-[#c3cbd3] bg-white px-3.5 py-2 text-[12.5px] font-bold text-[#001c64] transition-colors hover:border-[#0070e0]"
+              >
+                Remove duplicates
+              </button>
+            )}
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search transactions…"
+              className="h-10 w-[260px] rounded-full max-[820px]:w-full"
+            />
+          </div>
         </div>
         <div className="overflow-hidden rounded-[14px] border border-[#e6e9ec] bg-white max-[820px]:overflow-x-auto">
           <div className="grid grid-cols-[1fr_3fr_1.6fr_1.4fr_1.3fr] border-b border-[#eef1f4] bg-[#f7f9fb] px-5 py-3 text-[11.5px] font-bold uppercase tracking-[.5px] text-[#8b9198] max-[820px]:min-w-[640px]">
@@ -423,6 +502,19 @@ export default function BookOverviewPage({
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={dedupeOpen}
+        onOpenChange={setDedupeOpen}
+        title="Remove duplicate transactions?"
+        description={`Found ${dedupeCount} duplicate transaction${
+          dedupeCount === 1 ? "" : "s"
+        } (identical account, date, amount, direction and description). The earliest copy of each is kept and the rest are deleted. Continue?`}
+        confirmLabel={`Remove ${dedupeCount}`}
+        destructive
+        loading={dedupeBusy}
+        onConfirm={runDedupe}
+      />
     </div>
   );
 }

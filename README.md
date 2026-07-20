@@ -133,7 +133,18 @@ control when (and with which model) statements are parsed.
 - **Trigger:** `POST /api/statements/:id/process`. It requires an **active**
   provider (Settings → Models), downloads the file from Storage, runs the model,
   writes the extracted rows into `transactions`, and sets the statement `done`
-  (or `failed`). Re-running replaces that statement's transactions.
+  (or `failed`). Done statements show a **"Read by AI · N added"** indicator.
+- **No accidental doubling:** re-running a statement first **deletes that
+  statement's existing rows**, then re-inserts — so re-processing one statement
+  never doubles it. The UI still asks for confirmation before a re-run.
+- **Duplicate-upload guard:** if you upload the *same file again* as a separate
+  statement and try to run it, the UI warns that it will add duplicate data.
+- **Remove duplicates:** the Combined-transactions section has a **Remove
+  duplicates** action (`/api/transactions/dedupe`) that finds rows identical in
+  account + date + amount + direction + description, keeps the earliest of each,
+  and deletes the rest — after a confirmation showing the count.
+- **Delete a statement:** the trash button removes the statement, its Storage
+  file, and its transactions (behind a confirmation).
 - **Providers:** **Claude** (via the official `@anthropic-ai/sdk`) handles both
   **PDF and CSV** natively. **OpenAI / OpenRouter** handle **CSV** (their chat
   endpoints); PDF with those providers returns a clear error — use Claude for PDFs.
@@ -159,9 +170,10 @@ app/
     auth/login, auth/logout      PIN check → signed cookie; clear cookie
     books/                       GET (list) / POST (create)
     bank-accounts/               GET / POST / PATCH / DELETE
-    statements/                  GET (list, joined) / POST (upload)
+    statements/                  GET (list) / POST (upload) / DELETE (file + rows)
     statements/[id]/process/     POST (run active model → extract transactions)
     transactions/                GET (filters: account, date range)
+    transactions/dedupe/         GET (count) / POST (remove duplicate rows)
     ai-models/                   GET (masked) / POST (upsert by provider)
     ai-models/[id]/activate/     PATCH (activate one, deactivate others)
 components/
