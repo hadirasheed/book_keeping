@@ -88,6 +88,8 @@ Run both files in the Supabase SQL editor (or via the CLI), in order:
    — adds per-user token-usage + last-login columns to `users` (Google auth).
 5. [`supabase/migrations/0005_txn_time.sql`](./supabase/migrations/0005_txn_time.sql)
    — adds `txn_time` to `transactions` (the statement's own time-of-day).
+6. [`supabase/migrations/0006_audit_logs.sql`](./supabase/migrations/0006_audit_logs.sql)
+   — adds the `audit_logs` table (persisted AI audits for the Audit Logs list).
 
 Full instructions: [`supabase/README.md`](./supabase/README.md).
 
@@ -180,6 +182,18 @@ to the active model and returns a plain-English **summary**, **audit flags**
 **recommendations**. Tokens are attributed to the user + provider config.
 - The model is prompted to return strict JSON; the parser is defensive (strips
   fences, skips unparseable rows, normalizes sign/`direction`).
+- **Date range:** a **date-range selector** in the summary (and the transaction
+  list — they share one range) scopes the metrics and the list. Clicking **Run
+  AI audit** opens a confirmation that asks **from / to** (seeded from the active
+  range) before the AI runs, so you can audit just a period. The POST body takes
+  `{ from, to }` and only transactions in that range are audited.
+- **Audit Logs:** every audit is saved to `audit_logs` and listed under the
+  summary as **cards that expand on click** to show the full summary, flags,
+  recommendations and token usage (`GET /api/books/:id/audit`).
+- **Confirmations everywhere:** all AI runs — a single statement (**Run AI**),
+  **Run pending** across all statements, and the audit — ask for confirmation
+  first (they cost tokens), and each AI button carries **helper text** saying
+  what it does.
 
 ## Project structure
 

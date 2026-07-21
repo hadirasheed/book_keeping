@@ -28,6 +28,9 @@ Run both migration files, **in order**:
 4. `migrations/0004_google_auth.sql` — adds per-user `input_tokens`,
    `output_tokens`, and `last_login_at` to `users` (Google auth).
 5. `migrations/0005_txn_time.sql` — adds `txn_time` to `transactions`.
+6. `migrations/0006_audit_logs.sql` — adds the `audit_logs` table that
+   persists every AI audit (date range, txn count, summary, flags,
+   recommendations, token usage) for the book's Audit Logs list.
 
 ## Enable Google sign-in
 

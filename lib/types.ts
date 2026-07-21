@@ -84,6 +84,21 @@ export interface TransactionWithAccount extends Transaction {
   > | null;
 }
 
+export interface AuditLog {
+  id: string;
+  book_id: string;
+  user_id: string | null;
+  range_from: string | null;
+  range_to: string | null;
+  txn_count: number;
+  summary: string | null;
+  flags: string[];
+  recommendations: string[];
+  input_tokens: number;
+  output_tokens: number;
+  created_at: string;
+}
+
 export interface AIModelConfig {
   id: string;
   provider: AIProvider;

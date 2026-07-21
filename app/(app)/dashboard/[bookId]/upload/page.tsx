@@ -111,9 +111,16 @@ export default function UploadPage({
       )}
 
       {/* Recent uploads */}
-      <h3 className="mb-3 mt-7 text-[15px] font-bold text-[#001c64]">
+      <h3 className="mb-1 mt-7 text-[15px] font-bold text-[#001c64]">
         Recent uploads
       </h3>
+      <p className="mb-3 text-[12.5px] text-[#8b9198]">
+        <strong className="font-semibold text-[#6c7378]">Run AI</strong> reads a
+        statement, extracts every transaction (date, description, amount,
+        direction) and adds them to this book. It asks you to confirm first and
+        uses AI tokens. Re-running replaces that statement&apos;s existing rows
+        rather than duplicating them.
+      </p>
       <div className="overflow-hidden rounded-[14px] border border-[#e6e9ec] bg-white">
         {statements.length === 0 ? (
           <div className="px-5 py-8 text-center text-sm text-[#8b9198]">

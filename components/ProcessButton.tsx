@@ -67,19 +67,27 @@ export function ProcessButton({
     }
   }
 
-  const needsConfirm = status === "done" || Boolean(warnDuplicate);
-
+  // Every AI run asks for confirmation first (the request costs AI tokens).
   function onClick() {
-    if (needsConfirm) setConfirmOpen(true);
-    else void run();
+    setConfirmOpen(true);
   }
 
   const label =
     status === "failed" ? "Retry AI" : status === "done" ? "Re-run" : "Run AI";
 
+  const confirmTitle = warnDuplicate
+    ? "Possible duplicate data"
+    : status === "done"
+      ? "Re-run AI?"
+      : status === "failed"
+        ? "Retry AI?"
+        : "Run AI on this statement?";
+
   const confirmDescription = warnDuplicate
-    ? `Another statement named “${fileName}” in this book has already been read by AI. Running this one ADDS its transactions on top of the existing ones, which can create duplicates.\n\nYou can clean these up afterward with “Remove duplicates” in the Combined transactions section. Continue?`
-    : `“${fileName}” was already processed. Re-running replaces this statement's existing transactions with a fresh extraction — it will not double them.\n\nContinue?`;
+    ? `Another statement named “${fileName}” in this book has already been read by AI. Running this one ADDS its transactions on top of the existing ones, which can create duplicates.\n\nYou can clean these up afterward with “Remove duplicates” in the Transaction Intelligence section. Continue?`
+    : status === "done"
+      ? `“${fileName}” was already processed. Re-running replaces this statement's existing transactions with a fresh extraction — it will not double them.\n\nContinue?`
+      : `The AI will read “${fileName}”, extract every transaction (date, description, amount, direction) and add them to this book. This uses AI tokens.\n\nContinue?`;
 
   return (
     <>
@@ -102,7 +110,7 @@ export function ProcessButton({
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title={warnDuplicate ? "Possible duplicate data" : "Re-run AI?"}
+        title={confirmTitle}
         description={confirmDescription}
         confirmLabel="Run AI"
         onConfirm={run}

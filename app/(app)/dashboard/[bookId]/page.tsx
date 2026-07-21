@@ -12,6 +12,7 @@ import { DeleteStatementButton } from "@/components/DeleteStatementButton";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Pagination } from "@/components/Pagination";
 import { FinancialSummary } from "@/components/FinancialSummary";
+import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { initials, formatSigned, currencyLabel, fullDate } from "@/lib/utils";
 
 const TXN_PAGE_SIZE = 50;
@@ -54,12 +55,22 @@ export default function BookOverviewPage({
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [txnPage, setTxnPage] = useState(0);
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
 
   const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [banner, setBanner] = useState<ActionMessage | null>(null);
   const [dedupeOpen, setDedupeOpen] = useState(false);
   const [dedupeCount, setDedupeCount] = useState(0);
   const [dedupeBusy, setDedupeBusy] = useState(false);
+
+  // Apply the shared date range whenever it changes; reset to page 1.
+  function applyRange(next: { from: string; to: string }) {
+    setRangeFrom(next.from);
+    setRangeTo(next.to);
+    setTxnPage(0);
+  }
 
   // File names that already have a processed (done) statement — used to warn
   // before re-processing a same-named upload (the duplicate-data path).
@@ -110,6 +121,7 @@ export default function BookOverviewPage({
 
   // Process every pending/failed statement in sequence with the active model.
   async function runPending() {
+    setBulkConfirmOpen(false);
     const targets = statements.filter(
       (s) => s.status === "pending" || s.status === "failed"
     );
@@ -192,16 +204,27 @@ export default function BookOverviewPage({
     })();
   }, [bookId]);
 
+  // Scope by the shared date range first (drives both the summary + the list).
+  const rangeTxns = transactions.filter(
+    (t) =>
+      (!rangeFrom || t.txn_date >= rangeFrom) &&
+      (!rangeTo || t.txn_date <= rangeTo)
+  );
+
   const q = search.trim().toLowerCase();
   const filteredTxns = q
-    ? transactions.filter((t) =>
+    ? rangeTxns.filter((t) =>
         `${t.description ?? ""} ${t.category ?? ""} ${
           t.bank_account?.account_name ?? ""
         }`
           .toLowerCase()
           .includes(q)
       )
-    : transactions;
+    : rangeTxns;
+
+  const pendingCount = statements.filter(
+    (s) => s.status === "pending" || s.status === "failed"
+  ).length;
 
   // Paginate (20 per page). Clamp the page when the result set shrinks.
   const txnPageCount = Math.max(
@@ -310,8 +333,15 @@ export default function BookOverviewPage({
           ))}
         </div>
 
-        {/* AI audit + accounting metrics */}
-        <FinancialSummary transactions={transactions} bookId={bookId} />
+        {/* AI audit + accounting metrics (scoped by the shared date range) */}
+        <FinancialSummary
+          transactions={rangeTxns}
+          bookId={bookId}
+          rangeFrom={rangeFrom}
+          rangeTo={rangeTo}
+          onRangeChange={applyRange}
+          hasTransactions={transactions.length > 0}
+        />
 
         {/* AI run result / error banner (full text) */}
         {banner && (
@@ -339,32 +369,38 @@ export default function BookOverviewPage({
           <h2 className="text-[17px] font-bold text-[#001c64]">
             Uploaded statements
           </h2>
-          <div className="flex items-center gap-3">
-            {statements.some(
-              (s) => s.status === "pending" || s.status === "failed"
-            ) && (
-              <button
-                onClick={runPending}
-                disabled={bulkRunning}
-                className="inline-flex items-center gap-1.5 rounded-full bg-[#0070e0] px-3.5 py-1.5 text-[12.5px] font-bold text-white transition-colors hover:bg-[#005ecb] disabled:opacity-60"
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex items-center gap-3">
+              {pendingCount > 0 && (
+                <button
+                  onClick={() => setBulkConfirmOpen(true)}
+                  disabled={bulkRunning}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-[#0070e0] px-3.5 py-1.5 text-[12.5px] font-bold text-white transition-colors hover:bg-[#005ecb] disabled:opacity-60"
+                >
+                  {bulkRunning ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin" /> Running…
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="size-3.5" /> Run pending
+                    </>
+                  )}
+                </button>
+              )}
+              <Link
+                href={`/dashboard/${bookId}/upload`}
+                className="text-[13.5px] font-semibold text-[#0070e0]"
               >
-                {bulkRunning ? (
-                  <>
-                    <Loader2 className="size-3.5 animate-spin" /> Running…
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="size-3.5" /> Run pending
-                  </>
-                )}
-              </button>
+                Upload new →
+              </Link>
+            </div>
+            {pendingCount > 0 && (
+              <p className="max-w-[280px] text-right text-[11px] leading-snug text-[#8b9198]">
+                Reads every pending statement with AI and adds the extracted
+                transactions to this book. Uses AI tokens.
+              </p>
             )}
-            <Link
-              href={`/dashboard/${bookId}/upload`}
-              className="text-[13.5px] font-semibold text-[#0070e0]"
-            >
-              Upload new →
-            </Link>
           </div>
         </div>
         <div className="mb-[30px] overflow-hidden rounded-[14px] border border-[#e6e9ec] bg-white max-[820px]:overflow-x-auto">
@@ -445,7 +481,14 @@ export default function BookOverviewPage({
           <h2 className="text-[17px] font-bold text-[#001c64]">
             Transaction Intelligence
           </h2>
-          <div className="flex items-center gap-3 max-[820px]:w-full">
+          <div className="flex flex-wrap items-center gap-3 max-[820px]:w-full">
+            {transactions.length > 0 && (
+              <DateRangeFilter
+                from={rangeFrom}
+                to={rangeTo}
+                onChange={applyRange}
+              />
+            )}
             {transactions.length > 0 && (
               <button
                 onClick={checkDuplicates}
@@ -487,7 +530,9 @@ export default function BookOverviewPage({
             <div className="px-5 py-8 text-center text-sm text-[#8b9198]">
               {transactions.length === 0
                 ? "No transactions yet. They appear here once statements are parsed."
-                : `No transactions match “${search}”.`}
+                : q
+                  ? `No transactions match “${search}”.`
+                  : "No transactions in the selected date range."}
             </div>
           ) : (
             pagedTxns.map((t) => {
@@ -549,6 +594,18 @@ export default function BookOverviewPage({
           />
         </div>
       </div>
+
+      <ConfirmDialog
+        open={bulkConfirmOpen}
+        onOpenChange={setBulkConfirmOpen}
+        title="Run AI on all pending statements?"
+        description={`The AI will read ${pendingCount} pending statement${
+          pendingCount === 1 ? "" : "s"
+        } and add the extracted transactions to this book. This runs the active model on each one and uses AI tokens.\n\nContinue?`}
+        confirmLabel={`Run ${pendingCount}`}
+        loading={bulkRunning}
+        onConfirm={runPending}
+      />
 
       <ConfirmDialog
         open={dedupeOpen}
