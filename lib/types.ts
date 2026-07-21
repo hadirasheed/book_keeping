@@ -65,6 +65,7 @@ export interface Transaction {
   statement_id: string;
   bank_account_id: string;
   txn_date: string;
+  txn_time: string | null;
   description: string | null;
   raw_description: string | null;
   amount: number;

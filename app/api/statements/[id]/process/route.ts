@@ -82,6 +82,7 @@ export async function POST(
         statement_id: id,
         bank_account_id: statement.bank_account_id,
         txn_date: t.txn_date,
+        txn_time: t.txn_time,
         description: t.description,
         raw_description: t.description,
         amount: t.amount,

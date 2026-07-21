@@ -86,6 +86,8 @@ Run both files in the Supabase SQL editor (or via the CLI), in order:
    — adds `enabled` + token-usage columns to `ai_model_configs`.
 4. [`supabase/migrations/0004_google_auth.sql`](./supabase/migrations/0004_google_auth.sql)
    — adds per-user token-usage + last-login columns to `users` (Google auth).
+5. [`supabase/migrations/0005_txn_time.sql`](./supabase/migrations/0005_txn_time.sql)
+   — adds `txn_time` to `transactions` (the statement's own time-of-day).
 
 Full instructions: [`supabase/README.md`](./supabase/README.md).
 
@@ -162,6 +164,20 @@ control when (and with which model) statements are parsed.
   the admin panel), not from environment variables — no extra Vercel env for keys.
 - **Per-user token usage** is recorded on the `users` table each run and shown in
   the admin panel.
+- Extraction also captures each transaction's **time-of-day** from the statement
+  (`txn_time`); the book overview shows the statement date + time (not the upload
+  time), paginated 50 per page.
+
+### AI Audit & Financial Summary
+
+The book overview has an **AI Audit & Financial Summary** panel. Accounting
+metrics are computed deterministically from the book's transactions (income,
+expenses, net, savings rate, expense/income ratio, averages, largest in/out,
+spend-by-category, monthly cash flow). A **Run AI audit** button
+(`POST /api/books/:id/audit`) sends those metrics + a capped transaction sample
+to the active model and returns a plain-English **summary**, **audit flags**
+(anomalies, likely-miscategorized rows, duplicates, large/round amounts), and
+**recommendations**. Tokens are attributed to the user + provider config.
 - The model is prompted to return strict JSON; the parser is defensive (strips
   fences, skips unparseable rows, normalizes sign/`direction`).
 

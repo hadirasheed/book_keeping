@@ -11,15 +11,10 @@ import { ProcessButton, type ActionMessage } from "@/components/ProcessButton";
 import { DeleteStatementButton } from "@/components/DeleteStatementButton";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Pagination } from "@/components/Pagination";
-import {
-  initials,
-  formatSigned,
-  currencyLabel,
-  fullDate,
-  kuwaitDateTime,
-} from "@/lib/utils";
+import { FinancialSummary } from "@/components/FinancialSummary";
+import { initials, formatSigned, currencyLabel, fullDate } from "@/lib/utils";
 
-const TXN_PAGE_SIZE = 20;
+const TXN_PAGE_SIZE = 50;
 import type {
   BankAccount,
   Book,
@@ -315,6 +310,9 @@ export default function BookOverviewPage({
           ))}
         </div>
 
+        {/* AI audit + accounting metrics */}
+        <FinancialSummary transactions={transactions} bookId={bookId} />
+
         {/* AI run result / error banner (full text) */}
         {banner && (
           <div
@@ -479,7 +477,7 @@ export default function BookOverviewPage({
 
         <div className="mt-2 overflow-hidden rounded-[14px] border border-[#e6e9ec] bg-white max-[820px]:overflow-x-auto">
           <div className="grid grid-cols-[1.5fr_2.6fr_1.4fr_1.3fr_1.3fr] border-b border-[#eef1f4] bg-[#f7f9fb] px-5 py-3 text-[11.5px] font-bold uppercase tracking-[.5px] text-[#8b9198] max-[820px]:min-w-[720px]">
-            <div>Date &amp; time (Kuwait)</div>
+            <div>Date &amp; time</div>
             <div>Description</div>
             <div>Account</div>
             <div>Category</div>
@@ -507,9 +505,11 @@ export default function BookOverviewPage({
                     <div className="font-semibold text-[#2c2e2f]">
                       {fullDate(t.txn_date)}
                     </div>
-                    <div className="text-[11px] text-[#8b9198]">
-                      {kuwaitDateTime(t.created_at)}
-                    </div>
+                    {t.txn_time && (
+                      <div className="text-[11px] text-[#8b9198]">
+                        {t.txn_time}
+                      </div>
+                    )}
                   </div>
                   <div className="font-semibold text-[#2c2e2f]">
                     {t.description || t.raw_description || "—"}

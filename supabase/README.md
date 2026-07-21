@@ -27,6 +27,7 @@ Run both migration files, **in order**:
    `output_tokens`, and `last_tested_at` to `ai_model_configs`.
 4. `migrations/0004_google_auth.sql` — adds per-user `input_tokens`,
    `output_tokens`, and `last_login_at` to `users` (Google auth).
+5. `migrations/0005_txn_time.sql` — adds `txn_time` to `transactions`.
 
 ## Enable Google sign-in
 

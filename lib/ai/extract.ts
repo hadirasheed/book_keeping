@@ -4,6 +4,7 @@ import type { AIModelConfig } from "@/lib/types";
 // A single transaction the model extracted from a statement.
 export interface ExtractedTxn {
   txn_date: string; // YYYY-MM-DD
+  txn_time: string | null; // HH:MM as printed on the statement, if any
   description: string;
   amount: number; // positive magnitude
   direction: "debit" | "credit";
@@ -37,6 +38,7 @@ Respond with ONLY a JSON object of this exact shape, and nothing else:
   "transactions": [
     {
       "date": "YYYY-MM-DD",
+      "time": "HH:MM",             // 24-hour time exactly as printed on the statement, or null if the statement shows no time
       "description": "short cleaned-up description",
       "amount": 1234.56,            // positive number, no currency symbol or thousands separators
       "direction": "debit" | "credit",  // debit = money out, credit = money in
@@ -48,6 +50,7 @@ Respond with ONLY a JSON object of this exact shape, and nothing else:
 Rules:
 - "amount" is always a positive magnitude; use "direction" to indicate money in vs out.
 - Use ISO dates (YYYY-MM-DD). Infer the year from the statement period if a row omits it.
+- "time" must come from the statement itself — never invent it. Use null when the row has no time.
 - If there are no transactions, return {"transactions": []}.
 - Do not wrap the JSON in markdown fences or add commentary.`;
 
@@ -90,8 +93,22 @@ export function parseTransactions(raw: string): ExtractedTxn[] {
       direction = rawAmount >= 0 ? "credit" : "debit";
     }
 
+    // Normalize a "time" like "14:32" / "2:05 pm" to HH:MM (24h-ish text); keep null otherwise.
+    let txn_time: string | null = null;
+    const tRaw = String(row.time ?? "").trim();
+    const tMatch = tRaw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([ap]\.?m\.?)?$/i);
+    if (tMatch) {
+      let hh = Number(tMatch[1]);
+      const mm = tMatch[2];
+      const mer = tMatch[3]?.toLowerCase();
+      if (mer?.startsWith("p") && hh < 12) hh += 12;
+      if (mer?.startsWith("a") && hh === 12) hh = 0;
+      if (hh >= 0 && hh <= 23) txn_time = `${String(hh).padStart(2, "0")}:${mm}`;
+    }
+
     out.push({
       txn_date: date,
+      txn_time,
       description: String(row.description ?? "").slice(0, 500) || "—",
       amount,
       direction,
@@ -240,6 +257,43 @@ export async function extractTransactions(
 ): Promise<ExtractResult> {
   if (config.provider === "claude") return extractWithClaude(config, file);
   return extractWithOpenAICompatible(config, file);
+}
+
+/** Generic text completion across providers (used by the AI audit). */
+export async function chat(
+  config: AIModelConfig,
+  system: string,
+  user: string,
+  maxTokens = 2000
+): Promise<{ text: string; usage: TokenUsage }> {
+  if (config.provider === "claude") {
+    const client = new Anthropic({ apiKey: config.api_key });
+    const message = await client.messages.create({
+      model: config.model_name,
+      max_tokens: maxTokens,
+      system,
+      messages: [{ role: "user", content: user }],
+    });
+    const text = message.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("");
+    return {
+      text,
+      usage: {
+        input_tokens: message.usage.input_tokens ?? 0,
+        output_tokens: message.usage.output_tokens ?? 0,
+      },
+    };
+  }
+  return openAICompatChat(
+    config,
+    [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    maxTokens
+  );
 }
 
 /**
