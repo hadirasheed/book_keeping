@@ -89,6 +89,35 @@ export function bankCode(bank: string): string {
   return (bank.replace(/\s+/g, "").slice(0, 2) || "BK").toUpperCase();
 }
 
+const KUWAIT_TZ = "Asia/Kuwait";
+
+/** A statement date (YYYY-MM-DD) as a full date, e.g. "28 Jul 2026". */
+export function fullDate(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: KUWAIT_TZ,
+  });
+}
+
+/** A timestamp as full date + time in Kuwait, e.g. "28 Jul 2026, 06:32 PM". */
+export function kuwaitDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: KUWAIT_TZ,
+  });
+}
+
 /** Rotating tint palette for account/book avatar chips. */
 export const TINTS = [
   { bg: "#e6f0fc", color: "#0070e0" },

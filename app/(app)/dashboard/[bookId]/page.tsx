@@ -10,7 +10,16 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { ProcessButton, type ActionMessage } from "@/components/ProcessButton";
 import { DeleteStatementButton } from "@/components/DeleteStatementButton";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { initials, formatSigned, currencyLabel } from "@/lib/utils";
+import { Pagination } from "@/components/Pagination";
+import {
+  initials,
+  formatSigned,
+  currencyLabel,
+  fullDate,
+  kuwaitDateTime,
+} from "@/lib/utils";
+
+const TXN_PAGE_SIZE = 20;
 import type {
   BankAccount,
   Book,
@@ -49,6 +58,7 @@ export default function BookOverviewPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [txnPage, setTxnPage] = useState(0);
 
   const [bulkRunning, setBulkRunning] = useState(false);
   const [banner, setBanner] = useState<ActionMessage | null>(null);
@@ -197,6 +207,17 @@ export default function BookOverviewPage({
           .includes(q)
       )
     : transactions;
+
+  // Paginate (20 per page). Clamp the page when the result set shrinks.
+  const txnPageCount = Math.max(
+    1,
+    Math.ceil(filteredTxns.length / TXN_PAGE_SIZE)
+  );
+  const currentTxnPage = Math.min(txnPage, txnPageCount - 1);
+  const pagedTxns = filteredTxns.slice(
+    currentTxnPage * TXN_PAGE_SIZE,
+    currentTxnPage * TXN_PAGE_SIZE + TXN_PAGE_SIZE
+  );
 
   // Combined balance across loaded transactions (credit +, debit -).
   const balance = transactions.reduce(
@@ -421,10 +442,10 @@ export default function BookOverviewPage({
           )}
         </div>
 
-        {/* Combined transactions */}
+        {/* Transaction Intelligence */}
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-[17px] font-bold text-[#001c64]">
-            Combined transactions
+            Transaction Intelligence
           </h2>
           <div className="flex items-center gap-3 max-[820px]:w-full">
             {transactions.length > 0 && (
@@ -437,15 +458,28 @@ export default function BookOverviewPage({
             )}
             <Input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setTxnPage(0);
+              }}
               placeholder="Search transactions…"
               className="h-10 w-[260px] rounded-full max-[820px]:w-full"
             />
           </div>
         </div>
-        <div className="overflow-hidden rounded-[14px] border border-[#e6e9ec] bg-white max-[820px]:overflow-x-auto">
-          <div className="grid grid-cols-[1fr_3fr_1.6fr_1.4fr_1.3fr] border-b border-[#eef1f4] bg-[#f7f9fb] px-5 py-3 text-[11.5px] font-bold uppercase tracking-[.5px] text-[#8b9198] max-[820px]:min-w-[640px]">
-            <div>Date</div>
+
+        {/* Top pager */}
+        <Pagination
+          page={currentTxnPage}
+          pageCount={txnPageCount}
+          total={filteredTxns.length}
+          pageSize={TXN_PAGE_SIZE}
+          onChange={setTxnPage}
+        />
+
+        <div className="mt-2 overflow-hidden rounded-[14px] border border-[#e6e9ec] bg-white max-[820px]:overflow-x-auto">
+          <div className="grid grid-cols-[1.5fr_2.6fr_1.4fr_1.3fr_1.3fr] border-b border-[#eef1f4] bg-[#f7f9fb] px-5 py-3 text-[11.5px] font-bold uppercase tracking-[.5px] text-[#8b9198] max-[820px]:min-w-[720px]">
+            <div>Date &amp; time (Kuwait)</div>
             <div>Description</div>
             <div>Account</div>
             <div>Category</div>
@@ -458,22 +492,24 @@ export default function BookOverviewPage({
                 : `No transactions match “${search}”.`}
             </div>
           ) : (
-            filteredTxns.map((t) => {
+            pagedTxns.map((t) => {
               const amt = formatSigned(
                 t.amount,
                 t.direction,
-                t.bank_account?.currency ?? "USD"
+                t.bank_account?.currency ?? "KWD"
               );
               return (
                 <div
                   key={t.id}
-                  className="grid grid-cols-[1fr_3fr_1.6fr_1.4fr_1.3fr] items-center border-b border-[#f2f4f7] px-5 py-3 text-[13.5px] last:border-0 max-[820px]:min-w-[640px]"
+                  className="grid grid-cols-[1.5fr_2.6fr_1.4fr_1.3fr_1.3fr] items-center border-b border-[#f2f4f7] px-5 py-3 text-[13.5px] last:border-0 max-[820px]:min-w-[720px]"
                 >
-                  <div className="text-[#6c7378]">
-                    {new Date(t.txn_date).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                    })}
+                  <div>
+                    <div className="font-semibold text-[#2c2e2f]">
+                      {fullDate(t.txn_date)}
+                    </div>
+                    <div className="text-[11px] text-[#8b9198]">
+                      {kuwaitDateTime(t.created_at)}
+                    </div>
                   </div>
                   <div className="font-semibold text-[#2c2e2f]">
                     {t.description || t.raw_description || "—"}
@@ -500,6 +536,17 @@ export default function BookOverviewPage({
               );
             })
           )}
+        </div>
+
+        {/* Bottom pager */}
+        <div className="mt-2">
+          <Pagination
+            page={currentTxnPage}
+            pageCount={txnPageCount}
+            total={filteredTxns.length}
+            pageSize={TXN_PAGE_SIZE}
+            onChange={setTxnPage}
+          />
         </div>
       </div>
 
