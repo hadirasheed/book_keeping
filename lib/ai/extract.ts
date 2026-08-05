@@ -54,66 +54,133 @@ Rules:
 - If there are no transactions, return {"transactions": []}.
 - Do not wrap the JSON in markdown fences or add commentary.`;
 
+// Turn one raw model row into a validated ExtractedTxn, or null to skip it.
+function normalizeRow(r: unknown): ExtractedTxn | null {
+  if (!r || typeof r !== "object") return null;
+  const row = r as Record<string, unknown>;
+  const date = String(row.date ?? "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null; // skip unparseable dates
+
+  const rawAmount = Number(row.amount);
+  if (!Number.isFinite(rawAmount)) return null;
+  const amount = Math.abs(rawAmount);
+
+  let direction: "debit" | "credit";
+  if (row.direction === "credit" || row.direction === "debit") {
+    direction = row.direction;
+  } else {
+    direction = rawAmount >= 0 ? "credit" : "debit";
+  }
+
+  // Normalize a "time" like "14:32" / "2:05 pm" to HH:MM (24h-ish text); keep null otherwise.
+  let txn_time: string | null = null;
+  const tRaw = String(row.time ?? "").trim();
+  const tMatch = tRaw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([ap]\.?m\.?)?$/i);
+  if (tMatch) {
+    let hh = Number(tMatch[1]);
+    const mm = tMatch[2];
+    const mer = tMatch[3]?.toLowerCase();
+    if (mer?.startsWith("p") && hh < 12) hh += 12;
+    if (mer?.startsWith("a") && hh === 12) hh = 0;
+    if (hh >= 0 && hh <= 23) txn_time = `${String(hh).padStart(2, "0")}:${mm}`;
+  }
+
+  return {
+    txn_date: date,
+    txn_time,
+    description: String(row.description ?? "").slice(0, 500) || "—",
+    amount,
+    direction,
+    category: row.category ? String(row.category).slice(0, 100) : null,
+  };
+}
+
+// Salvage complete transaction objects from a JSON string that failed to parse
+// as a whole (usually because the reply was truncated at the token limit, or
+// carried a stray trailing comma). Walks the `transactions` array and pulls out
+// each balanced { ... } block, parsing them one at a time; an incomplete final
+// object is simply dropped instead of failing the entire run.
+function salvageRows(text: string): unknown[] {
+  const key = text.indexOf('"transactions"');
+  const from = text.indexOf("[", key >= 0 ? key : 0);
+  if (from < 0) return [];
+
+  const objs: unknown[] = [];
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  let objStart = -1;
+
+  for (let i = from + 1; i < text.length; i++) {
+    const ch = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === "\\") esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') inStr = true;
+    else if (ch === "{") {
+      if (depth === 0) objStart = i;
+      depth++;
+    } else if (ch === "}") {
+      depth--;
+      if (depth === 0 && objStart >= 0) {
+        const chunk = text.slice(objStart, i + 1);
+        try {
+          objs.push(JSON.parse(chunk));
+        } catch {
+          // Tolerate a trailing comma inside the object, e.g. {"a":1,}.
+          try {
+            objs.push(JSON.parse(chunk.replace(/,(\s*})$/, "$1")));
+          } catch {
+            // Unrecoverable single object — skip it.
+          }
+        }
+        objStart = -1;
+      }
+    } else if (ch === "]" && depth === 0) {
+      break; // end of the transactions array
+    }
+  }
+  return objs;
+}
+
 /** Best-effort parse of a model response into transactions. */
 export function parseTransactions(raw: string): ExtractedTxn[] {
   let text = raw.trim();
   // Strip accidental ```json fences.
   text = text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
   // Fall back to the first {...} block if there is surrounding prose.
-  if (!text.startsWith("{")) {
+  if (text.startsWith("{")) {
+    // leave as-is
+  } else {
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
     if (start >= 0 && end > start) text = text.slice(start, end + 1);
   }
 
-  let parsed: unknown;
+  let rows: unknown[] | null = null;
   try {
-    parsed = JSON.parse(text);
+    const parsed = JSON.parse(text) as { transactions?: unknown };
+    rows = Array.isArray(parsed.transactions) ? parsed.transactions : [];
   } catch {
-    throw new Error("The model did not return valid JSON.");
+    // Whole-document parse failed (commonly a reply truncated at the token
+    // limit). Salvage whatever complete transaction objects we can.
+    rows = salvageRows(text);
+    if (rows.length === 0) {
+      throw new Error(
+        "The model did not return valid JSON (and no transactions could be " +
+          "recovered). The statement may be too large for one pass, or the " +
+          "model returned an unexpected format — try again, or split the file."
+      );
+    }
   }
-
-  const rows = (parsed as { transactions?: unknown }).transactions;
-  if (!Array.isArray(rows)) return [];
 
   const out: ExtractedTxn[] = [];
   for (const r of rows) {
-    const row = r as Record<string, unknown>;
-    const date = String(row.date ?? "").slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue; // skip unparseable dates
-
-    const rawAmount = Number(row.amount);
-    if (!Number.isFinite(rawAmount)) continue;
-    const amount = Math.abs(rawAmount);
-
-    let direction: "debit" | "credit";
-    if (row.direction === "credit" || row.direction === "debit") {
-      direction = row.direction;
-    } else {
-      direction = rawAmount >= 0 ? "credit" : "debit";
-    }
-
-    // Normalize a "time" like "14:32" / "2:05 pm" to HH:MM (24h-ish text); keep null otherwise.
-    let txn_time: string | null = null;
-    const tRaw = String(row.time ?? "").trim();
-    const tMatch = tRaw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([ap]\.?m\.?)?$/i);
-    if (tMatch) {
-      let hh = Number(tMatch[1]);
-      const mm = tMatch[2];
-      const mer = tMatch[3]?.toLowerCase();
-      if (mer?.startsWith("p") && hh < 12) hh += 12;
-      if (mer?.startsWith("a") && hh === 12) hh = 0;
-      if (hh >= 0 && hh <= 23) txn_time = `${String(hh).padStart(2, "0")}:${mm}`;
-    }
-
-    out.push({
-      txn_date: date,
-      txn_time,
-      description: String(row.description ?? "").slice(0, 500) || "—",
-      amount,
-      direction,
-      category: row.category ? String(row.category).slice(0, 100) : null,
-    });
+    const row = normalizeRow(r);
+    if (row) out.push(row);
   }
   return out;
 }
